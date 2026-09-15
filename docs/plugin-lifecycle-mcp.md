@@ -34,6 +34,10 @@ Version 1 native tools remain supported. Version 2 may add `mcpServers` without 
 
 External Plugin credentials stay in the Host's in-memory registration record. Agenriod-local manifests are stored in its app-private files directory. In both cases headers are omitted from the public catalog and System Prompt. Native and MCP tool names are kept in separate namespaces (`mcp.<server>.<tool>` internally); the bundled runtime gives every tool a bounded, deterministic model name.
 
+## Agenriod-local MCP configuration
+
+The Agenriod Settings → Plugins page can create a local Plugin manifest with a server ID, Streamable HTTP URL, and optional JSON headers. These manifests are stored under the Agenriod app-private `files/plugins/` directory and are owned by the Agent Host process. Their MCP tools are available while the Host is running; headers are never included in the System Prompt. Use the Refresh button after a server changes its tool list.
+
 ## Streamable HTTP MCP
 
 `mcp-client` implements the initial Streamable HTTP client seam:

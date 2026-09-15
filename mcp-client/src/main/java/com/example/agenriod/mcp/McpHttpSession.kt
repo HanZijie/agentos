@@ -11,6 +11,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 /** Streamable HTTP tools client. Each instance belongs to exactly one live plugin registration. */
+fun redactMcpAddress(raw: String): String = runCatching {
+    val uri = URI(raw)
+    require(uri.scheme != null && uri.host != null)
+    val authority = buildString { append(uri.host); if (uri.port >= 0) append(":").append(uri.port) }
+    uri.scheme + "://" + authority + (uri.rawPath ?: "/") + if (uri.rawQuery != null) "?[query redacted]" else ""
+}.getOrDefault("[invalid MCP URL]")
+
 class McpHttpSession(config: JSONObject) : AutoCloseable {
     private val endpoint = URI(config.getString("url"))
     private val headers = config.optJSONObject("headers") ?: JSONObject()
