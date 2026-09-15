@@ -6,7 +6,7 @@ import org.json.JSONObject
 
 /** Host-owned MCP sessions for manifests entered in Agenriod Settings. */
 internal class LocalMcpRegistry {
-    private data class Entry(val pluginId: String, val manifest: JSONObject, val sessions: Map<String, McpHttpSession>) {
+    private data class Entry(val pluginId: String, var manifest: JSONObject, val sessions: Map<String, McpHttpSession>) {
         var signature: String = ""
         var tools: Map<String, JSONObject> = emptyMap()
         var error: Boolean = false
@@ -32,6 +32,7 @@ internal class LocalMcpRegistry {
                 entries[id] = Entry(id, manifest, sessions).also { it.signature = signature }
             }
             val current = entries[id]!!
+            current.manifest = manifest
             val found = mutableMapOf<String, JSONObject>()
             for ((serverId, session) in current.sessions) {
                 val tools = runCatching { session.listTools() }.getOrNull() ?: continue

@@ -34,6 +34,8 @@ class McpSdkInteropTest {
             assertTrue(descriptors.single().getJSONArray("tools").toString().contains("mcp.sdk.greet"))
             val result = JSONObject(registry.invoke("local-sdk", "mcp.sdk.greet", JSONObject().put("name", "Agenriod")))
             assertEquals("Hello Agenriod", result.getJSONArray("content").getJSONObject(0).getString("text"))
+            val renamed = JSONObject(manifest.toString()).put("name", "Renamed MCP")
+            assertEquals("Renamed MCP", registry.refresh(listOf(renamed)).single().getString("name"))
         } finally { File(context.filesDir, "plugins/local-sdk.json").delete() }
     }
 }
