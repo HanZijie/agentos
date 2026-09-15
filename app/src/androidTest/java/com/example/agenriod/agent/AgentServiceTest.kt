@@ -100,6 +100,7 @@ class AgentServiceTest {
         var session = ""
         ModelToolFixture { request, index ->
             if (index == 1) {
+                assertTrue("System prompt must describe MCP configuration", request.getJSONArray("messages").getJSONObject(0).optString("content").contains("MCP configuration"))
                 val tools = request.getJSONArray("tools")
                 val name = (0 until tools.length()).map { tools.getJSONObject(it).getJSONObject("function").getString("name") }
                     .first { it.contains("mcp_notes_notes_stats") }

@@ -135,6 +135,14 @@ internal class ActivePluginCatalog private constructor(context: Context) {
             .put("description", entry?.descriptor?.optString("description") ?: "Open this app to activate its tools")
             .put("active", entry != null).put("status", status).put("tools", tools)
     }
+    @Synchronized fun promptSummary(): String = entries.values.flatMap { entry ->
+        val servers = entry.descriptor.optJSONArray("mcpServers") ?: JSONArray()
+        (0 until servers.length()).mapNotNull { index ->
+            val server = servers.optJSONObject(index) ?: return@mapNotNull null
+            "- Plugin ${entry.descriptor.optString("name", entry.owner)}, MCP server ${server.optString("id")}: ${server.optString("transport")} at ${server.optString("url")}"
+        }
+    }.joinToString("\n")
+
     fun known(id: String) = installed().any { it.first == id }
     fun invoke(id: String, tool: String, args: JSONObject): String {
         val entry = synchronized(this) { entries[id]?.takeIf { it.endpoint.asBinder().isBinderAlive } }

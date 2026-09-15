@@ -98,6 +98,8 @@ import com.example.agenriod.ui.insertShortcut
 import com.example.agenriod.ui.CompactComposer
 import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
+import org.json.JSONArray
+import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
     private lateinit var client: AgentClient
@@ -440,29 +442,45 @@ private fun HookSettings(hooks: String, onChange: (String) -> Unit, modifier: Mo
 private fun PluginManagement(state: AgentUiState, host: AgentClient, modifier: Modifier) {
     val context = LocalContext.current
     var manifest by remember { mutableStateOf("") }
-    Column(modifier.padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+    var mcpId by remember { mutableStateOf("") }
+    var mcpUrl by remember { mutableStateOf("") }
+    var mcpHeaders by remember { mutableStateOf("") }
+    val headersValid = mcpHeaders.isBlank() || runCatching { JSONObject(mcpHeaders) }.isSuccess
+    LazyColumn(modifier.padding(top = 16.dp).imePadding(), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
+        item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("Installed plugins", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             TextButton(onClick = host::refreshPlugins) { Text("Refresh") }
-        }
-        if (state.plugins.isEmpty()) Text("No plugins yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        else LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(state.plugins, key = { it.id }) { plugin ->
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                    Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) { Text(plugin.name, fontWeight = FontWeight.SemiBold); Text("${plugin.toolCount} tools · ${plugin.id}", style = MaterialTheme.typography.labelSmall); Text(plugin.status, style = MaterialTheme.typography.labelSmall) }
-                        if (!plugin.active && plugin.packageName.isNotBlank()) TextButton(onClick = {
-                            context.packageManager.getLaunchIntentForPackage(plugin.packageName)?.let { context.startActivity(it) }
-                        }) { Text("Open app") }
-                        if (plugin.packageName.isBlank()) TextButton(onClick = { host.deletePlugin(plugin.id) }) { Text("Delete") }
-                    }
+        } }
+        if (state.plugins.isEmpty()) item { Text("No plugins yet", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        else items(state.plugins, key = { it.id }) { plugin ->
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) { Text(plugin.name, fontWeight = FontWeight.SemiBold); Text("${plugin.toolCount} tools · ${plugin.id}", style = MaterialTheme.typography.labelSmall); Text(plugin.status, style = MaterialTheme.typography.labelSmall) }
+                    if (!plugin.active && plugin.packageName.isNotBlank()) TextButton(onClick = {
+                        context.packageManager.getLaunchIntentForPackage(plugin.packageName)?.let { context.startActivity(it) }
+                    }) { Text("Open app") }
+                    if (plugin.packageName.isBlank()) TextButton(onClick = { host.deletePlugin(plugin.id) }) { Text("Delete") }
                 }
             }
         }
-        HorizontalDivider()
-        TextButton(onClick = { manifest = EXAMPLE_PLUGIN_MANIFEST }) { Text("Use example manifest") }
-        OutlinedTextField(manifest, { manifest = it }, Modifier.fillMaxWidth(), minLines = 4, maxLines = 8, label = { Text("Plugin manifest JSON") })
-        Button(onClick = { host.saveSettings(manifest); manifest = "" }, enabled = manifest.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Install plugin") }
+        item { HorizontalDivider() }
+        item { Text("Add Streamable HTTP MCP", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+        item { Text("The server address and transport are added to an app-private Plugin manifest. Authentication headers stay app-private and are never put in the System Prompt.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        item { SettingField("Server id", mcpId) { mcpId = it } }
+        item { SettingField("MCP URL (HTTPS or loopback HTTP)", mcpUrl) { mcpUrl = it } }
+        item { OutlinedTextField(mcpHeaders, { mcpHeaders = it }, Modifier.fillMaxWidth(), label = { Text("Headers JSON (optional)") }, minLines = 1, maxLines = 3, isError = !headersValid) }
+        item { Button(enabled = mcpId.matches(Regex("[A-Za-z0-9_-]{1,32}")) && mcpUrl.isNotBlank() && headersValid, onClick = {
+            val server = JSONObject().put("id", mcpId).put("transport", "streamable-http").put("url", mcpUrl.trim())
+            if (mcpHeaders.isNotBlank()) server.put("headers", JSONObject(mcpHeaders))
+            val plugin = JSONObject().put("protocolVersion", 2).put("id", "mcp-$mcpId").put("name", "MCP · $mcpId")
+                .put("description", "MCP server configured in Agenriod").put("tools", JSONArray()).put("mcpServers", JSONArray().put(server))
+            host.saveSettings(plugin.toString())
+            mcpId = ""; mcpUrl = ""; mcpHeaders = ""
+        }, modifier = Modifier.fillMaxWidth()) { Text("Add MCP server") } }
+        item { HorizontalDivider() }
+        item { TextButton(onClick = { manifest = EXAMPLE_PLUGIN_MANIFEST }) { Text("Use example manifest") } }
+        item { OutlinedTextField(manifest, { manifest = it }, Modifier.fillMaxWidth(), minLines = 4, maxLines = 8, label = { Text("Plugin manifest JSON") }) }
+        item { Button(onClick = { host.saveSettings(manifest); manifest = "" }, enabled = manifest.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Install plugin") } }
     }
 }
 

@@ -31,6 +31,7 @@ class NativeAgentBridge(
 ) {
     private val workspace: Path = appContext.filesDir.toPath().resolve("workspace").also { Files.createDirectories(it) }
     private val externalPlugins = AndroidPluginRegistry(appContext)
+    private val localMcp = LocalMcpRegistry()
     private val pluginsDir: Path = appContext.filesDir.toPath().resolve("plugins").also { Files.createDirectories(it) }
     @Volatile private var activeConnection: HttpURLConnection? = null
     @Volatile private var activeProcess: Process? = null
@@ -59,11 +60,25 @@ class NativeAgentBridge(
 
     fun listPlugins(): List<JSONObject> = pluginCatalog().filter { it.optBoolean("active", true) }
 
-    fun pluginCatalog(): List<JSONObject> = (runCatching {
-        Files.list(pluginsDir).use { stream -> stream.filter { it.toString().endsWith(".json") }.iterator().asSequence().toList().mapNotNull { file: Path ->
-            runCatching { JSONObject(file.toFile().readText()).put("active", true).put("status", "Active · Agent Host running") }.getOrNull()
-        } }
-    }.getOrDefault(emptyList()).filterNot { externalPlugins.has(it.optString("id")) } + externalPlugins.catalog()).distinctBy { it.optString("id") }
+    fun pluginCatalog(): List<JSONObject> {
+        val local = runCatching {
+            Files.list(pluginsDir).use { stream -> stream.filter { it.toString().endsWith(".json") }.iterator().asSequence().toList()
+                .mapNotNull { file -> runCatching { JSONObject(file.toFile().readText()) }.getOrNull() } }
+        }.getOrDefault(emptyList())
+        val localDescriptors = runCatching { localMcp.refresh(local) }.getOrDefault(local)
+        return (localDescriptors.filterNot { externalPlugins.has(it.optString("id")) } + externalPlugins.catalog()).distinctBy { it.optString("id") }
+    }
+
+    fun systemPromptContext(): String {
+        val local = localMcp.promptSummary()
+        val external = externalPlugins.promptSummary()
+        val addresses = listOf(local, external).filter { it.isNotBlank() }.joinToString("\n")
+        return "MCP configuration: Plugin manifests declare mcpServers with transport=streamable-http and a URL; the Host exposes discovered MCP tools by name and sends calls to the configured server. Authentication headers are hidden from this prompt.\n" +
+            if (addresses.isBlank()) "No MCP server is currently configured." else "Configured MCP server addresses:\n$addresses"
+    }
+
+    private fun effectiveSystemPrompt(config: ModelConfig): String = listOf(config.systemPrompt, systemPromptContext())
+        .filter { it.isNotBlank() }.joinToString("\n\n")
 
     fun deletePlugin(id: String): Boolean = runCatching {
         require(id.matches(Regex("[A-Za-z0-9._-]+"))) { "Invalid plugin id" }
@@ -280,6 +295,7 @@ class NativeAgentBridge(
             val response = JSONObject(externalPlugins.invoke(id, input.optString("tool"), input.optJSONObject("args") ?: JSONObject()))
             return if (response.has("content")) response.toString() else result(response.toString())
         }
+        localMcp.invoke(id, input.optString("tool"), input.optJSONObject("args") ?: JSONObject())?.let { return it }
         val file = pluginsDir.resolve("$id.json")
         require(Files.exists(file)) { "Plugin not found: $id" }
         val manifest = JSONObject(file.toFile().readText())
@@ -367,7 +383,7 @@ class NativeAgentBridge(
     private fun openAiBody(model: JSONObject, context: JSONObject, config: ModelConfig): JSONObject = JSONObject().apply {
         put("model", model.optString("id", config.model))
         put("messages", JSONArray().also { messages ->
-            if (config.systemPrompt.isNotBlank()) messages.put(JSONObject().put("role", "system").put("content", config.systemPrompt))
+            if (effectiveSystemPrompt(config).isNotBlank()) messages.put(JSONObject().put("role", "system").put("content", effectiveSystemPrompt(config)))
             val converted = openAiMessages(context.getJSONArray("messages"))
             for (index in 0 until converted.length()) messages.put(converted.get(index))
         })
@@ -427,7 +443,7 @@ class NativeAgentBridge(
         put("model", model.optString("id", config.model))
         put("max_tokens", config.maxTokens)
         put("messages", anthropicMessages(context.getJSONArray("messages")))
-        if (context.optString("systemPrompt").isNotBlank()) put("system", context.optString("systemPrompt"))
+        if (effectiveSystemPrompt(config).isNotBlank()) put("system", effectiveSystemPrompt(config))
         val tools = context.optJSONArray("tools")
         if (tools != null && tools.length() > 0) put("tools", JSONArray().also { out -> for (i in 0 until tools.length()) { val t = tools.getJSONObject(i); out.put(JSONObject().put("name", t.optString("name")).put("description", t.optString("description")).put("input_schema", t.opt("parametersForModel") ?: t.opt("parameters"))) } })
     }
@@ -443,7 +459,7 @@ class NativeAgentBridge(
 
     private fun geminiBody(model: JSONObject, context: JSONObject, config: ModelConfig): JSONObject = JSONObject().apply {
         put("contents", geminiMessages(context.getJSONArray("messages")))
-        if (config.systemPrompt.isNotBlank()) put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", config.systemPrompt))))
+        if (effectiveSystemPrompt(config).isNotBlank()) put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", effectiveSystemPrompt(config)))))
         put("generationConfig", JSONObject().put("maxOutputTokens", config.maxTokens))
         val tools = context.optJSONArray("tools")
         if (tools != null && tools.length() > 0) put("tools", JSONArray().put(JSONObject().put("functionDeclarations", JSONArray().also { declarations ->

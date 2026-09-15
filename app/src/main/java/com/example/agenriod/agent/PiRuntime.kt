@@ -26,7 +26,7 @@ class PiRuntime(
             runtime.evaluate<Any?>(source, "agenriod-agent.js", false)
             val configJson = JSONObject().apply {
                 put("model", modelJson(config))
-                put("systemPrompt", config.systemPrompt)
+                put("systemPrompt", listOf(config.systemPrompt, bridge.systemPromptContext()).filter { it.isNotBlank() }.joinToString("\n\n"))
                 put("sessionId", sessionId)
                 put("runId", runId)
                 put("initialMessages", org.json.JSONArray().apply { initialMessages.forEach { put(JSONObject(it)) } })

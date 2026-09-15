@@ -10,6 +10,7 @@ internal class AndroidPluginRegistry(context: Context) {
     fun catalog(): List<JSONObject> = catalog.catalog()
     fun list(): List<JSONObject> = catalog().filter { it.optBoolean("active") }
     fun refresh() = catalog.refreshMcp()
+    fun promptSummary() = catalog.promptSummary()
     fun has(id: String): Boolean = catalog.known(id)
     fun invoke(id: String, tool: String, args: JSONObject): String = catalog.invoke(id, tool, args)
     companion object { const val ACTION = "com.example.agenriod.action.AGENT_PLUGIN" }
