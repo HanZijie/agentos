@@ -6,12 +6,15 @@ import android.os.IBinder
 import com.example.agenriod.plugin.AgentPluginService
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.UUID
+import android.content.Context
 
 /** Separate APK proof of the Android Agent Plugin Interface. */
 class NotesPluginService : Service() {
-    private val repository by lazy { NotesRepository(applicationContext) }
-    private val binder = object : AgentPluginService.Stub() {
+    override fun onBind(intent: Intent?): IBinder = (application as NotesApplication).endpoint
+}
+
+class NotesPluginEndpoint(context: Context) : AgentPluginService.Stub() {
+    private val repository = NotesRepository(context)
         // Named PLUGIN_DESCRIPTOR: inside Stub, `DESCRIPTOR` resolves to the
         // AIDL-generated interface-name constant and would shadow ours.
         override fun describe(): String = PLUGIN_DESCRIPTOR
@@ -23,8 +26,6 @@ class NotesPluginService : Service() {
                 else -> error("Unknown notes tool: $tool")
             }
         }.getOrElse { JSONObject().put("error", it.message ?: "Notes plugin failed").toString() }
-    }
-    override fun onBind(intent: Intent?): IBinder = binder
     companion object {
         val PLUGIN_DESCRIPTOR = JSONObject().put("protocolVersion", 1).put("id", "notes").put("name", "Notes").put("description", "Search and update private notes").put("tools", JSONArray().apply {
             put(JSONObject().put("name", "notes.search").put("description", "Search notes").put("parameters", JSONObject().put("type", "object").put("properties", JSONObject().put("query", JSONObject().put("type", "string")))))

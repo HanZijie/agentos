@@ -41,8 +41,8 @@ internal fun ModelConfig.toJson() = JSONObject().apply {
 internal fun JSONObject.toModelConfig() = ModelConfig(optString("provider", "openai-compatible"), optString("baseUrl", "https://api.openai.com/v1"), optString("apiKey"), optString("model", "gpt-4o-mini"), optString("displayName", "OpenAI-compatible"), optBoolean("supportsVision", true), optInt("maxTokens", 4096), optString("systemPrompt"))
 private fun SessionSummary.toJson() = JSONObject().put("id", id).put("title", title).put("updatedAt", updatedAt)
 private fun JSONObject.toSessionSummary() = SessionSummary(optString("id"), optString("title", "New session"), optLong("updatedAt"))
-private fun PluginSummary.toJson() = JSONObject().put("id", id).put("name", name).put("description", description).put("toolCount", toolCount)
-private fun JSONObject.toPlugin() = PluginSummary(optString("id"), optString("name"), optString("description"), optInt("toolCount"))
+private fun PluginSummary.toJson() = JSONObject().put("id", id).put("name", name).put("description", description).put("toolCount", toolCount).put("active", active).put("status", status).put("packageName", packageName)
+private fun JSONObject.toPlugin() = PluginSummary(optString("id"), optString("name"), optString("description"), optInt("toolCount"), optBoolean("active", true), optString("status"), optString("packageName"))
 private fun SkillDefinition.toJson() = JSONObject().put("name", name).put("description", description).put("instruction", instruction)
 private fun JSONObject.toSkill() = SkillDefinition(optString("name"), optString("description"), optString("instruction"))
 private fun JSONArray?.toMessages() = if (this == null) emptyList() else (0 until length()).mapNotNull { optJSONObject(it)?.let { j -> ChatMessage(j.optString("id"), j.optString("role"), j.optString("text"), if (j.isNull("toolName")) null else j.optString("toolName").ifBlank { null }, j.optBoolean("isError"), j.optBoolean("isStreaming")) } }

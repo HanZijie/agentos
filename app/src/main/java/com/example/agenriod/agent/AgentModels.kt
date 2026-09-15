@@ -27,6 +27,9 @@ data class PluginSummary(
     val name: String,
     val description: String = "",
     val toolCount: Int = 0,
+    val active: Boolean = true,
+    val status: String = "",
+    val packageName: String = "",
 )
 
 data class SkillDefinition(

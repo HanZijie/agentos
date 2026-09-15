@@ -38,7 +38,10 @@ class AgentHost(private val context: Context) {
         }
         _state.value = _state.value.copy(tasks = tasks, isRunning = active, status = status)
     }
-    init { reload() }
+    init {
+        reload()
+        scope.launch { bridge.pluginChanges.collect { refreshCatalog() } }
+    }
 
     fun submit(prompt: String, images: List<ImageAttachment> = emptyList(), requestId: String = UUID.randomUUID().toString()): String {
         require(prompt.isNotBlank()) { "Prompt is empty" }
@@ -89,11 +92,11 @@ class AgentHost(private val context: Context) {
     fun refreshPlugins() = reload()
     private suspend fun refreshCatalog() {
         skills = skillCatalog.load()
-        val plugins = withContext(Dispatchers.IO) { bridge.listPlugins() }.mapNotNull { json ->
+        val plugins = withContext(Dispatchers.IO) { bridge.pluginCatalog() }.mapNotNull { json ->
             val id = json.optString("id").ifBlank { return@mapNotNull null }
-            PluginSummary(id, json.optString("name", id), json.optString("description"), json.optJSONArray("tools")?.length() ?: 0)
+            PluginSummary(id, json.optString("name", id), json.optString("description"), json.optJSONArray("tools")?.length() ?: 0, json.optBoolean("active", true), json.optString("status"), json.optString("packageName"))
         }
-        _state.value = _state.value.copy(plugins = plugins, pluginCount = plugins.size, skills = skills)
+        _state.value = _state.value.copy(plugins = plugins, pluginCount = plugins.count { it.active }, skills = skills)
     }
     suspend fun newSession() { switchTo(sessionStore.create()) }
     suspend fun switchSession(id: String) { if (id == document.summary.id) return; switchTo(sessionStore.read(id)) }
@@ -142,7 +145,7 @@ class AgentHost(private val context: Context) {
         val skill = command?.groupValues?.get(1)?.let { name -> skills.firstOrNull { it.name.equals(name, true) } }
         if (command != null && skill != null) { instructions += skill.instruction; request = request.removeRange(command.range).trim() }
         val mention = request.split(Regex("\\s+")).firstOrNull { it.startsWith("@") }
-        val plugin = mention?.removePrefix("@")?.let { name -> _state.value.plugins.firstOrNull { it.name.equals(name, true) || it.id == name } }
+        val plugin = mention?.removePrefix("@")?.let { name -> _state.value.plugins.firstOrNull { it.active && (it.name.equals(name, true) || it.id == name) } }
         if (plugin != null) { instructions += "Use the ${plugin.name} plugin tools when useful."; request = request.replace(mention.orEmpty(), "").trim() }
         return if (instructions.isEmpty()) prompt else instructions.joinToString("\n\n") + "\n\nUser request: $request"
     }

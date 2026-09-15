@@ -54,11 +54,15 @@ class NativeAgentBridge(
         stream.filter { it.toString().endsWith(".json") }.findFirst().map { it.toFile().readText() }.orElse("")
     }
 
-    fun listPlugins(): List<JSONObject> = (runCatching {
+    val pluginChanges get() = externalPlugins.changes
+
+    fun listPlugins(): List<JSONObject> = pluginCatalog().filter { it.optBoolean("active", true) }
+
+    fun pluginCatalog(): List<JSONObject> = (runCatching {
         Files.list(pluginsDir).use { stream -> stream.filter { it.toString().endsWith(".json") }.iterator().asSequence().toList().mapNotNull { file: Path ->
-            runCatching { JSONObject(file.toFile().readText()) }.getOrNull()
+            runCatching { JSONObject(file.toFile().readText()).put("active", true).put("status", "Active · Agent Host running") }.getOrNull()
         } }
-    }.getOrDefault(emptyList()) + externalPlugins.list()).distinctBy { it.optString("id") }
+    }.getOrDefault(emptyList()).filterNot { externalPlugins.has(it.optString("id")) } + externalPlugins.catalog()).distinctBy { it.optString("id") }
 
     fun deletePlugin(id: String): Boolean = runCatching {
         require(id.matches(Regex("[A-Za-z0-9._-]+"))) { "Invalid plugin id" }

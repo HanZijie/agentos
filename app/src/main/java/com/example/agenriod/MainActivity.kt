@@ -231,7 +231,7 @@ private fun ChatPane(state: AgentUiState, host: AgentClient, modifier: Modifier 
     val word = if (editor.selection.collapsed && editor.composition == null) shortcutWord(editor.text, editor.selection.start) else null
     val token = word?.query.orEmpty()
     val suggestions = when {
-        token.startsWith("@") -> state.plugins.filter { it.name.contains(token.drop(1), true) || it.id.contains(token.drop(1), true) }.take(5)
+        token.startsWith("@") -> state.plugins.filter { it.active && (it.name.contains(token.drop(1), true) || it.id.contains(token.drop(1), true)) }.take(5)
         token.startsWith("/") -> state.skills.filter { it.name.startsWith(token.drop(1), true) }.take(5)
         else -> emptyList()
     }
@@ -445,8 +445,8 @@ private fun PluginManagement(state: AgentUiState, host: AgentClient, modifier: M
             items(state.plugins, key = { it.id }) { plugin ->
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                     Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) { Text(plugin.name, fontWeight = FontWeight.SemiBold); Text("${plugin.toolCount} tools · ${plugin.id}", style = MaterialTheme.typography.labelSmall) }
-                        TextButton(onClick = { host.deletePlugin(plugin.id) }) { Text("Delete") }
+                        Column(Modifier.weight(1f)) { Text(plugin.name, fontWeight = FontWeight.SemiBold); Text("${plugin.toolCount} tools · ${plugin.id}", style = MaterialTheme.typography.labelSmall); Text(plugin.status, style = MaterialTheme.typography.labelSmall) }
+                        if (plugin.packageName.isBlank()) TextButton(onClick = { host.deletePlugin(plugin.id) }) { Text("Delete") }
                     }
                 }
             }

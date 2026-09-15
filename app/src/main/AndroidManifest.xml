@@ -27,6 +27,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Agenriod">
         <service
+            android:name=".agent.PluginHostService"
+            android:exported="true"
+            android:permission="com.example.agenriod.permission.BIND_AGENT_PLUGIN"
+            android:process=":agent" />
+        <service
             android:name=".agent.AgentService"
             android:exported="false"
             android:process=":agent"

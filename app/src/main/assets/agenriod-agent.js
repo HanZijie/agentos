@@ -10648,7 +10648,7 @@ ${JSON.stringify(toolCall.arguments, null, 2)}`;
     }
   });
   function pluginTools(plugins) {
-    return (plugins ?? []).flatMap((plugin) => (plugin.tools ?? []).filter((item) => item.enabled !== false).map((item) => {
+    return (plugins ?? []).filter((plugin) => plugin.active !== false).flatMap((plugin) => (plugin.tools ?? []).filter((item) => item.enabled !== false).map((item) => {
       const name = `plugin_${plugin.id}_${item.name}`.replace(/[^a-zA-Z0-9_]/g, "_");
       return {
         name,
@@ -10753,6 +10753,9 @@ ${JSON.stringify(toolCall.arguments, null, 2)}`;
       streamFn: createStreamFunction(),
       initialState: { model, systemPrompt: config.systemPrompt ?? "", messages: config.initialMessages ?? [], tools: [...builtinTools, ...pluginTools(plugins)] },
       toolExecution: "sequential",
+      prepareNextTurnWithContext: async ({ context }) => ({
+        context: { ...context, tools: [...builtinTools, ...pluginTools(await call("plugins"))] }
+      }),
       beforeToolCall: async ({ toolCall, args }) => {
         const result = await call("hook", { event: "before_tool", tool: toolCall.name, args });
         return result?.block ? { block: true, reason: result.reason ?? "Blocked by hook" } : void 0;
@@ -10771,6 +10774,7 @@ ${JSON.stringify(toolCall.arguments, null, 2)}`;
   globalThis.__agenriod_prompt = async (promptJson) => {
     if (!agent) throw new Error("Agent is not configured");
     const input = typeof promptJson === "string" ? JSON.parse(promptJson) : promptJson;
+    agent.state.tools = [...builtinTools, ...pluginTools(await call("plugins"))];
     await agent.prompt(input.text, input.images ?? []);
     return { messages: agent.state.messages };
   };
