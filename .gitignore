@@ -17,3 +17,5 @@ local.properties
 /.gradle-user-home
 **/build/
 /.kotlin/
+/.env.anthropic.local
+/.idea/

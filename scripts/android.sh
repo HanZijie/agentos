@@ -14,6 +14,7 @@ Usage: ./scripts/android.sh <command> [arguments]
   start                Start or reuse the selected AVD; wait for Android to boot
   build                Build the debug APK
   run                  Start AVD, build, install and launch the app
+  configure-model      Import local Anthropic settings into an installed debug app
   logs [logcat args]    Stream logs from the running app (-d for a snapshot)
   crashes              Read Android's crash buffer
   screenshot [path]    Save a PNG (default: build/codex/screenshot.png)
@@ -23,7 +24,8 @@ Usage: ./scripts/android.sh <command> [arguments]
   instrumentation      Build/install the Notes plugin and run device tests
 
 Optional overrides: ANDROID_AVD (default Pixel_8a), ANDROID_SERIAL,
-ANDROID_HOME, JAVA_HOME, ANDROID_APP_ID, ANDROID_ACTIVITY.
+ANDROID_HOME, JAVA_HOME, ANDROID_APP_ID, ANDROID_ACTIVITY,
+ANTHROPIC_ENV_FILE (default .env.anthropic.local).
 HELP
 }
 
@@ -61,6 +63,9 @@ APP_ID="${ANDROID_APP_ID:-com.example.agenriod}"
 ACTIVITY="${ANDROID_ACTIVITY:-$APP_ID/.MainActivity}"
 SERIAL="${ANDROID_SERIAL:-}"
 OUTPUT_DIR="$PROJECT_ROOT/build/codex"
+MODEL_ENV_FILE="${ANTHROPIC_ENV_FILE:-$PROJECT_ROOT/.env.anthropic.local}"
+MODEL_CONFIG_FILE=''
+TEST_RUNNER="$APP_ID.test/com.example.agenriod.testing.LocalModelTestRunner"
 
 gradle() {
     [[ -n "${JAVA_HOME:-}" && -x "$JAVA_HOME/bin/java" ]] || fail 'No JDK found. Set JAVA_HOME to a compatible JDK.'
@@ -82,6 +87,39 @@ gradle() {
 build_agent() {
     command -v node >/dev/null 2>&1 || fail 'Node.js is required to bundle the pi runtime. Run node runtime/build.mjs manually.'
     node runtime/build.mjs
+}
+
+cleanup_model_config() {
+    if [[ -n "$MODEL_CONFIG_FILE" ]]; then
+        "$ADB" -s "$SERIAL" shell rm -f "$MODEL_CONFIG_FILE" >/dev/null 2>&1 || true
+        MODEL_CONFIG_FILE=''
+    fi
+}
+
+stage_model_config() {
+    MODEL_CONFIG_FILE="$(node "$PROJECT_ROOT/scripts/anthropic-env.mjs" stage "$ADB" "$SERIAL" "$MODEL_ENV_FILE")"
+}
+
+import_installed_model_config() {
+    if [[ "$(node "$PROJECT_ROOT/scripts/anthropic-env.mjs" check "$MODEL_ENV_FILE")" != configured ]]; then
+        printf 'Local Anthropic settings skipped (empty key or missing file).\n'
+        return
+    fi
+    gradle :app:assembleDebugAndroidTest "$@"
+    "$ADB" -s "$SERIAL" install -r "$PROJECT_ROOT/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
+    "$ADB" -s "$SERIAL" shell am force-stop "$APP_ID"
+    trap cleanup_model_config EXIT
+    stage_model_config
+    [[ -n "$MODEL_CONFIG_FILE" ]] || return
+    local import_output
+    if ! import_output="$("$ADB" -s "$SERIAL" shell am instrument -w \
+        -e modelConfigFile "$MODEL_CONFIG_FILE" -e modelSetupOnly true "$TEST_RUNNER" 2>&1)"; then
+        fail 'Local Anthropic configuration import failed.'
+    fi
+    [[ "$import_output" == *MODEL_CONFIG_APPLIED* ]] || fail 'Local Anthropic configuration was not applied. Check the environment file and debug installation.'
+    cleanup_model_config
+    trap - EXIT
+    printf 'Local Anthropic settings imported into encrypted app storage. No model request sent.\n'
 }
 
 find_device() {
@@ -151,6 +189,13 @@ case "$COMMAND" in
         build_agent
         gradle :app:assembleDebug "$@"
         "$ADB" -s "$SERIAL" install -r "$PROJECT_ROOT/app/build/outputs/apk/debug/app-debug.apk"
+        import_installed_model_config "$@"
+        "$ADB" -s "$SERIAL" shell am start -W -S -n "$ACTIVITY"
+        ;;
+    configure-model)
+        require_device
+        "$ADB" -s "$SERIAL" shell run-as "$APP_ID" true >/dev/null 2>&1 || fail 'Install the debug app first with ./scripts/android.sh run.'
+        import_installed_model_config "$@"
         "$ADB" -s "$SERIAL" shell am start -W -S -n "$ACTIVITY"
         ;;
     instrumentation)
@@ -158,15 +203,22 @@ case "$COMMAND" in
         build_agent
         gradle :notes-plugin:assembleDebug :app:assembleDebugAndroidTest "$@"
         "$ADB" -s "$SERIAL" install -r "$PROJECT_ROOT/notes-plugin/build/outputs/apk/debug/notes-plugin-debug.apk"
+        mkdir -p "$OUTPUT_DIR"
         FIXTURE_LOG="$OUTPUT_DIR/mcp-sdk-fixture.log"
         FIXTURE_PID=''
         cleanup_fixture() {
+            cleanup_model_config
             if [[ -n "$FIXTURE_PID" ]]; then
                 kill "$FIXTURE_PID" 2>/dev/null || true
                 wait "$FIXTURE_PID" 2>/dev/null || true
             fi
         }
         trap cleanup_fixture EXIT
+        stage_model_config
+        model_args=()
+        if [[ -n "$MODEL_CONFIG_FILE" ]]; then
+            model_args+=("-Pandroid.testInstrumentationRunnerArguments.modelConfigFile=$MODEL_CONFIG_FILE")
+        fi
         node "$PROJECT_ROOT/runtime/mcp-sdk-fixture.mjs" >"$FIXTURE_LOG" 2>&1 &
         FIXTURE_PID=$!
         fixture_port=''
@@ -177,7 +229,7 @@ case "$COMMAND" in
         done
         [[ -n "$fixture_port" ]] || fail "MCP SDK fixture did not start; inspect $FIXTURE_LOG"
         "$ADB" -s "$SERIAL" reverse "tcp:$fixture_port" "tcp:$fixture_port" >/dev/null
-        if gradle :app:connectedDebugAndroidTest "-Pandroid.testInstrumentationRunnerArguments.port=$fixture_port" "$@"; then
+        if gradle :app:connectedDebugAndroidTest "-Pandroid.testInstrumentationRunnerArguments.port=$fixture_port" "${model_args[@]}" "$@"; then
             status=0
         else
             status=$?

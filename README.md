@@ -132,6 +132,8 @@ QuickJS 没有浏览器标准库，因此 `build.mjs` 在 bundle 前添加了 `T
 
 API key 只保存在 app-private preferences 中的 Keystore 加密字段。请求只发往用户配置的 endpoint；代码不会把 key 写入 Session transcript、Hook 环境变量或 Plugin 参数。
 
+本地 Anthropic 测试可以填写 `.env.anthropic.local`（模板见 [.env.anthropic.example](.env.anthropic.example)），然后运行 `./scripts/android.sh run` 或 `./scripts/android.sh instrumentation`。导入使用 Android Keystore；空 Key 会跳过导入，现有配置保持不变。
+
 ## Plugin
 
 Plugin 是 app-private `plugins` 目录中的 JSON manifest。设置页可以安装示例或粘贴 manifest，也可以删除已安装 Plugin。
