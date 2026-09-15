@@ -139,7 +139,7 @@ internal class ActivePluginCatalog private constructor(context: Context) {
         val servers = entry.descriptor.optJSONArray("mcpServers") ?: JSONArray()
         (0 until servers.length()).mapNotNull { index ->
             val server = servers.optJSONObject(index) ?: return@mapNotNull null
-            "- Plugin ${entry.descriptor.optString("name", entry.owner)}, MCP server ${server.optString("id")}: ${server.optString("transport")} at ${server.optString("url")}"
+            "- Plugin ${entry.descriptor.optString("name", entry.owner)}, MCP server ${server.optString("id")}: ${server.optString("transport")} at ${com.example.agenriod.mcp.redactMcpAddress(server.optString("url"))}"
         }
     }.joinToString("\n")
 

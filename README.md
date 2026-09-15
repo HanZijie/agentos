@@ -134,6 +134,10 @@ API key 只保存在 app-private preferences 中的 Keystore 加密字段。请�
 
 本地 Anthropic 测试可以填写 `.env.anthropic.local`（模板见 [.env.anthropic.example](.env.anthropic.example)），然后运行 `./scripts/android.sh run` 或 `./scripts/android.sh instrumentation`。导入使用 Android Keystore；空 Key 会跳过导入，现有配置保持不变。
 
+## MCP
+
+In Settings → Plugins, use **Add Streamable HTTP MCP** to create a local MCP entry. Provide a server ID, an HTTPS or loopback HTTP URL, and optional headers as JSON. Agenriod discovers `tools/list`, exposes the tools to the Agent, and describes the configured transport and address in the System Prompt while omitting authentication headers.
+
 ## Plugin
 
 Plugin 是 app-private `plugins` 目录中的 JSON manifest。设置页可以安装示例或粘贴 manifest，也可以删除已安装 Plugin。

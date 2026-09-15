@@ -44,6 +44,7 @@ class NativeAgentBridge(
     fun installPluginManifest(manifest: String): Result<String> = runCatching {
         val json = JSONObject(manifest)
         val id = json.optString("id").ifBlank { UUID.randomUUID().toString() }
+        localMcp.validate(json)
         require(id.matches(Regex("[A-Za-z0-9._-]+"))) { "Plugin id may contain only letters, digits, '.', '_' and '-'" }
         val file = pluginsDir.resolve("$id.json").normalize()
         require(file.parent == pluginsDir) { "Invalid plugin path" }

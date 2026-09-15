@@ -1,6 +1,7 @@
 package com.example.agenriod.agent
 
 import com.example.agenriod.mcp.McpHttpSession
+import com.example.agenriod.mcp.redactMcpAddress
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -12,6 +13,17 @@ internal class LocalMcpRegistry {
         var error: Boolean = false
     }
     private val entries = mutableMapOf<String, Entry>()
+
+    fun validate(manifest: JSONObject) {
+        val configs = manifest.optJSONArray("mcpServers") ?: return
+        require(configs.length() <= 8) { "At most 8 MCP servers per local plugin" }
+        val ids = mutableSetOf<String>()
+        for (index in 0 until configs.length()) {
+            val config = configs.getJSONObject(index)
+            require(ids.add(config.getString("id"))) { "Duplicate MCP server id" }
+            McpHttpSession(config).close()
+        }
+    }
 
     @Synchronized fun refresh(manifests: List<JSONObject>): List<JSONObject> {
         val nextIds = manifests.map { it.optString("id") }.toSet()
@@ -54,14 +66,16 @@ internal class LocalMcpRegistry {
         val serverId = definition.optString("serverId")
         val server = entry.sessions[serverId] ?: error("MCP server is unavailable: $serverId")
         val original = tool.removePrefix("mcp.$serverId.")
-        return server.callTool(original, args).toString()
+        val result = server.callTool(original, args).toString()
+        if (server.toolsChanged) refresh(listOf(entry.manifest))
+        return result
     }
 
     @Synchronized fun promptSummary(): String = entries.values.flatMap { entry ->
         val servers = entry.manifest.optJSONArray("mcpServers") ?: JSONArray()
         (0 until servers.length()).mapNotNull { index ->
             val server = servers.optJSONObject(index) ?: return@mapNotNull null
-            "- Plugin ${entry.pluginId}, MCP server ${server.optString("id")}: ${server.optString("transport")} at ${server.optString("url")}"
+            "- Plugin ${entry.pluginId}, MCP server ${server.optString("id")}: ${server.optString("transport")} at ${redactMcpAddress(server.optString("url"))}"
         }
     }.joinToString("\n")
 
