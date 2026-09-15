@@ -234,6 +234,15 @@ case "$COMMAND" in
         else
             status=$?
         fi
+        # connected tests may uninstall the target app. Restore the local
+        # Anthropic settings afterwards so Android Studio's normal Run action
+        # sees the encrypted configuration on the next install.
+        if [[ "$(node "$PROJECT_ROOT/scripts/anthropic-env.mjs" check "$MODEL_ENV_FILE")" == configured ]]; then
+            cleanup_model_config
+            "$ADB" -s "$SERIAL" install -r "$PROJECT_ROOT/app/build/outputs/apk/debug/app-debug.apk" >/dev/null 2>&1 || true
+            import_installed_model_config >/dev/null 2>&1 || true
+            "$ADB" -s "$SERIAL" shell am start -W -S -n "$ACTIVITY" >/dev/null 2>&1 || true
+        fi
         trap - EXIT
         cleanup_fixture
         exit "$status"
