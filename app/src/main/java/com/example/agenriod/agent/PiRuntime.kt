@@ -17,7 +17,7 @@ class PiRuntime(
     @Volatile private var quickJs: QuickJs? = null
     private val operations = Mutex()
 
-    suspend fun start(config: ModelConfig, initialMessages: List<String> = emptyList(), sessionId: String = "default"): Result<Unit> = withContext(dispatcher) {
+    suspend fun start(config: ModelConfig, initialMessages: List<String> = emptyList(), sessionId: String = "default", runId: String = ""): Result<Unit> = withContext(dispatcher) {
         operations.withLock { runCatching {
             val runtime = quickJs ?: QuickJs.create(dispatcher).also { quickJs = it }
             bridge.defineBindings(runtime)
@@ -28,6 +28,7 @@ class PiRuntime(
                 put("model", modelJson(config))
                 put("systemPrompt", config.systemPrompt)
                 put("sessionId", sessionId)
+                put("runId", runId)
                 put("initialMessages", org.json.JSONArray().apply { initialMessages.forEach { put(JSONObject(it)) } })
             }.toString()
             runtime.evaluate<Any?>("__agenriod_start(${JSONObject.quote(configJson)})", "start.js", false)

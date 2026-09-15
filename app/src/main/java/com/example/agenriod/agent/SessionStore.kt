@@ -1,5 +1,6 @@
 package com.example.agenriod.agent
 
+import android.util.AtomicFile
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
@@ -29,7 +30,7 @@ class SessionStore(context: Context, storageDirectory: File = File(context.appli
     fun read(id: String): SessionDocument {
         val file = fileFor(id)
         if (!file.exists()) return SessionDocument(SessionSummary(id, "New session", 0L), emptyList(), emptyList())
-        val json = JSONObject(file.readText())
+        val json = JSONObject(AtomicFile(file).openRead().bufferedReader().use { it.readText() })
         val raw = json.optJSONArray("rawMessages").toStringList()
         val ui = json.optJSONArray("uiMessages").toChatMessages()
         return SessionDocument(
@@ -53,7 +54,10 @@ class SessionStore(context: Context, storageDirectory: File = File(context.appli
                 put("isStreaming", false)
             }) } })
         }
-        fileFor(document.summary.id).writeText(json.toString())
+        val file = AtomicFile(fileFor(document.summary.id))
+        val stream = file.startWrite()
+        try { stream.write(json.toString().toByteArray()); file.finishWrite(stream) }
+        catch (failure: Exception) { file.failWrite(stream); throw failure }
     }
 
     fun delete(id: String) { fileFor(id).delete() }

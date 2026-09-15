@@ -3,11 +3,17 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <permission android:name="com.example.agenriod.permission.BIND_AGENT_PLUGIN" android:protectionLevel="signature" />
+    <uses-permission android:name="com.example.agenriod.permission.BIND_AGENT_PLUGIN" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <queries>
         <intent><action android:name="android.speech.RecognitionService" /></intent>
+        <intent><action android:name="com.example.agenriod.action.AGENT_PLUGIN" /></intent>
     </queries>
 
     <application
@@ -20,6 +26,34 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Agenriod">
+        <service
+            android:name=".agent.AgentService"
+            android:exported="false"
+            android:process=":agent"
+            android:stopWithTask="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-started agent host runs queued assistant tasks across UI lifecycle changes" />
+        </service>
+        <service
+            android:name=".voice.AgenriodVoiceInteractionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <intent-filter><action android:name="android.service.voice.VoiceInteractionService" /></intent-filter>
+            <meta-data android:name="android.voice_interaction" android:resource="@xml/voice_interaction_service" />
+        </service>
+        <service
+            android:name=".voice.AgenriodVoiceInteractionSessionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION"
+            android:process=":voice_session">
+            <intent-filter><action android:name="android.service.voice.VoiceInteractionSessionService" /></intent-filter>
+        </service>
+        <service
+            android:name=".voice.AgenriodRecognitionService"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter><action android:name="android.speech.RecognitionService" /></intent-filter>
+        </service>
         <activity
             android:name=".MainActivity"
             android:exported="true"

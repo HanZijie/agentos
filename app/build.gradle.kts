@@ -32,10 +32,18 @@ android {
     }
     buildFeatures {
         compose = true
+        aidl = true
+    }
+    testOptions {
+        // Test workers talk to the Gradle daemon over loopback; sandboxed agent
+        // shells block IPv6 loopback, so keep worker IPC on IPv4.
+        unitTests.all { it.jvmArgs("-Djava.net.preferIPv4Stack=true") }
     }
 }
 
 dependencies {
+    implementation(project(":plugin-api"))
+    implementation(project(":file-broker"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)

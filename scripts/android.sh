@@ -63,7 +63,19 @@ OUTPUT_DIR="$PROJECT_ROOT/build/codex"
 
 gradle() {
     [[ -n "${JAVA_HOME:-}" && -x "$JAVA_HOME/bin/java" ]] || fail 'No JDK found. Set JAVA_HOME to a compatible JDK.'
-    ./gradlew --console=plain "$@"
+    # Agent sandbox shells inject a broken javaagent via JAVA_TOOL_OPTIONS and
+    # block dual-stack (IPv6) loopback sockets, which breaks client->daemon,
+    # worker->daemon and ddmlib->adb IPC. Overriding JAVA_TOOL_OPTIONS forces
+    # IPv4 in every spawned JVM (daemon, test workers, UTP) and drops the agent.
+    export JAVA_TOOL_OPTIONS="-Djava.net.preferIPv4Stack=true"
+    mkdir -p "$PROJECT_ROOT/build/tmpdir"
+    export GRADLE_OPTS="-Djava.net.preferIPv4Stack=true ${GRADLE_OPTS:-}"
+    # Project-local Gradle home: sandboxed shells cannot rename/delete inside
+    # ~/.gradle, which Gradle's temp-file and cache semantics require.
+    export GRADLE_USER_HOME="$PROJECT_ROOT/.gradle-user-home"
+    ./gradlew --console=plain \
+        "-Dorg.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8 -Djava.net.preferIPv4Stack=true -Djava.io.tmpdir=$PROJECT_ROOT/build/tmpdir" \
+        "$@"
 }
 
 build_agent() {

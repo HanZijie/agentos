@@ -45,4 +45,14 @@ Codex 的本地环境支持把项目命令设为顶部动作，动作会在内�
 
 如果 Codex 沙箱报告 ADB 的 `Operation not permitted`，或 Gradle 无法写入 `~/.gradle`，应对相应的本机开发命令使用授权执行。SDK、AVD 和 Gradle 缓存位于项目目录之外。
 
+## Agent 沙箱下的 Gradle
+
+部分 Agent 沙箱会注入损坏的 `JAVA_TOOL_OPTIONS`、禁止 JVM 使用双栈（IPv6）loopback socket，并禁止在 `~/.gradle` 内做 rename/unlink。`./scripts/android.sh gradle` 已内置应对：
+
+- 覆盖 `JAVA_TOOL_OPTIONS=-Djava.net.preferIPv4Stack=true`，让 daemon、测试 worker、ddmlib→adb 的所有 JVM IPC 走 IPv4；
+- `GRADLE_USER_HOME` 固定为项目内 `.gradle-user-home/`（已 gitignore；首次可从 `~/.gradle` 拷贝 `caches/` 与 `wrapper/` 预热）；
+- JVM 临时目录固定为 `build/tmpdir/`。
+
+因此在沙箱里应始终通过 `./scripts/android.sh gradle …` 调用构建，不要直接运行 `./gradlew`。
+
 需要交互式断点调试时，可在 Android Studio 打开同一个项目，使用 **Attach debugger to Android process** 附加到 `com.example.agenriod`。Codex 中的这套入口提供编译、部署、界面操作、截图及日志调试。

@@ -2,7 +2,10 @@
   "name": "agenriod-pi-runtime",
   "private": true,
   "type": "module",
-  "scripts": { "build": "node build.mjs" },
+  "scripts": {
+    "build": "node build.mjs",
+    "test:plugin": "node plugin-contract-test.mjs"
+  },
   "dependencies": {
     "@earendil-works/pi-agent-core": "^0.85.1",
     "@earendil-works/pi-ai": "^0.85.1",

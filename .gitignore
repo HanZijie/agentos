@@ -14,3 +14,6 @@
 .cxx
 local.properties
 /runtime/node_modules
+/.gradle-user-home
+**/build/
+/.kotlin/

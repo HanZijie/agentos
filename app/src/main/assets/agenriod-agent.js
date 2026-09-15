@@ -10762,8 +10762,8 @@ ${JSON.stringify(toolCall.arguments, null, 2)}`;
         return void 0;
       }
     });
-    agent.subscribe(async (event) => {
-      await call("event", { ...event, sessionId: config.sessionId });
+    agent.subscribe((event) => {
+      __agenriod_call("event", JSON.stringify({ ...event, sessionId: config.sessionId, runId: config.runId }));
     });
     return { model, tools: agent.state.tools.map((item) => item.name) };
   }

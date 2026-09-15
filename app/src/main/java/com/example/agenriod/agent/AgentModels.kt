@@ -41,7 +41,24 @@ data class SessionSummary(
     val updatedAt: Long,
 )
 
+data class TaskSummary(val id: String, val sessionId: String, val prompt: String, val status: String, val error: String = "")
+
+data class AgentHostState(
+    val tasks: List<TaskSummary> = emptyList(),
+    val messages: List<ChatMessage> = emptyList(),
+    val config: ModelConfig = ModelConfig(),
+    val hooks: String = "",
+    val pluginCount: Int = 0,
+    val isRunning: Boolean = false,
+    val status: String = "Ready",
+    val currentSession: SessionSummary = SessionSummary("default", "New session", 0L),
+    val sessions: List<SessionSummary> = emptyList(),
+    val plugins: List<PluginSummary> = emptyList(),
+    val skills: List<SkillDefinition> = emptyList(),
+)
+
 data class AgentUiState(
+    val tasks: List<TaskSummary> = emptyList(),
     val messages: List<ChatMessage> = emptyList(),
     val draftValue: TextFieldValue = TextFieldValue(),
     val config: ModelConfig = ModelConfig(),

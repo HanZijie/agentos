@@ -1,10 +1,14 @@
 package com.example.agenriod
 
 import android.content.Intent
+import android.content.ComponentName
+import android.content.ServiceConnection
+import android.os.IBinder
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Build
+import android.provider.Settings
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.RecognitionListener
@@ -13,7 +17,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.lifecycle.ViewModelProvider
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -81,13 +84,14 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
 import com.example.agenriod.agent.AgentUiState
-import com.example.agenriod.agent.AgenriodController
-import com.example.agenriod.agent.AgenriodViewModel
+import com.example.agenriod.agent.AgentClient
+import com.example.agenriod.agent.AgentService
 import com.example.agenriod.agent.ChatMessage
 import com.example.agenriod.agent.ImageAttachment
 import com.example.agenriod.agent.PluginSummary
 import com.example.agenriod.agent.SessionSummary
 import com.example.agenriod.agent.SkillDefinition
+import com.example.agenriod.agent.TaskSummary
 import com.example.agenriod.ui.theme.AgenriodTheme
 import com.example.agenriod.ui.shortcutWord
 import com.example.agenriod.ui.insertShortcut
@@ -95,18 +99,35 @@ import com.example.agenriod.ui.CompactComposer
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    private lateinit var client: AgentClient
+    private var bound = false
+    private val connection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName, service: IBinder) { client.attach(service) }
+        override fun onServiceDisconnected(name: ComponentName) { client.detach() }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        val controller = ViewModelProvider(this)[AgenriodViewModel::class.java].controller
-        setContent { AgenriodApp(controller) }
+        client = AgentClient(applicationContext)
+        setContent { AgenriodApp(client) }
+        val intent = Intent(this, AgentService::class.java)
+        ContextCompat.startForegroundService(this, intent)
+        bound = bindService(intent, connection, BIND_AUTO_CREATE)
+    }
+
+    override fun onDestroy() {
+        client.close()
+        if (bound) unbindService(connection)
+        bound = false
+        super.onDestroy()
     }
 }
 
 @Composable
 @OptIn(ExperimentalComposeUiApi::class)
-private fun AgenriodApp(controller: AgenriodController) {
-    val state by controller.state.collectAsState()
+private fun AgenriodApp(host: AgentClient) {
+    val state by host.state.collectAsState()
     val view = LocalView.current
     DisposableEffect(view) {
         val previous = if (Build.VERSION.SDK_INT >= 33) view.isAutoHandwritingEnabled else false
@@ -126,13 +147,13 @@ private fun AgenriodApp(controller: AgenriodController) {
         }
     }
     AgenriodTheme {
-        InterceptPlatformTextInput(inputInterceptor) { AgentScreen(state, controller) }
+        InterceptPlatformTextInput(inputInterceptor) { AgentScreen(state, host) }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AgentScreen(state: AgentUiState, controller: AgenriodController) {
+private fun AgentScreen(state: AgentUiState, host: AgentClient) {
     Scaffold(topBar = {
         TopAppBar(title = {
             Column {
@@ -140,27 +161,27 @@ private fun AgentScreen(state: AgentUiState, controller: AgenriodController) {
                 Text(state.status, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             }
         }, actions = {
-            TextButton(onClick = controller::toggleSessions) { Text("Sessions") }
-            FilterChip(selected = false, onClick = controller::toggleSettings, label = { Text(state.config.model, maxLines = 1) })
-            IconButton(onClick = controller::toggleSettings) { Icon(Icons.Default.Settings, contentDescription = "Settings") }
+            TextButton(onClick = host::toggleSessions) { Text("Sessions") }
+            FilterChip(selected = false, onClick = host::toggleSettings, label = { Text(state.config.model, maxLines = 1) })
+            IconButton(onClick = host::toggleSettings) { Icon(Icons.Default.Settings, contentDescription = "Settings") }
         })
     }) { padding ->
         when {
-            state.showSessions -> SessionPane(state, controller, Modifier.padding(padding))
-            state.showSettings -> SettingsPane(state, controller, Modifier.padding(padding))
-            else -> ChatPane(state, controller, Modifier.padding(padding))
+            state.showSessions -> SessionPane(state, host, Modifier.padding(padding))
+            state.showSettings -> SettingsPane(state, host, Modifier.padding(padding))
+            else -> ChatPane(state, host, Modifier.padding(padding))
         }
     }
 }
 
 @Composable
-private fun ChatPane(state: AgentUiState, controller: AgenriodController, modifier: Modifier = Modifier) {
+private fun ChatPane(state: AgentUiState, host: AgentClient, modifier: Modifier = Modifier) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val editor = state.draftValue
     var pickedImage by remember { mutableStateOf<ImageAttachment?>(null) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) scope.launch { pickedImage = controller.readImage(uri) }
+        if (uri != null) scope.launch { pickedImage = host.readImage(uri) }
     }
     val context = androidx.compose.ui.platform.LocalContext.current
     val currentDraft by rememberUpdatedState(state.draft)
@@ -187,7 +208,7 @@ private fun ChatPane(state: AgentUiState, controller: AgenriodController, modifi
                 listening = false
                 voiceStatus = ""
                 val spoken = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
-                if (!spoken.isNullOrBlank()) controller.setDraft((currentDraft + " " + spoken).trim())
+                if (!spoken.isNullOrBlank()) host.setDraft((currentDraft + " " + spoken).trim())
             }
             override fun onError(error: Int) {
                 listening = false
@@ -224,13 +245,13 @@ private fun ChatPane(state: AgentUiState, controller: AgenriodController, modifi
                 if (suggestions.isNotEmpty()) SuggestionList(suggestions) { selected ->
                     word?.let { active ->
                         val inserted = insertShortcut(editor.text, active, selected)
-                        controller.updateDraft(TextFieldValue(inserted.text, TextRange(inserted.cursor)))
+                        host.updateDraft(TextFieldValue(inserted.text, TextRange(inserted.cursor)))
                     }
                 }
                 if (token.startsWith("@") && suggestions.isEmpty()) {
                     Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(if (state.plugins.isEmpty()) "No plugins installed" else "No matching plugin", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
-                        TextButton(onClick = controller::openPluginManager) { Text("Manage plugins") }
+                        TextButton(onClick = host::openPluginManager) { Text("Manage plugins") }
                     }
                 }
                 if (voiceStatus.isNotBlank()) Text(voiceStatus, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 6.dp))
@@ -240,9 +261,9 @@ private fun ChatPane(state: AgentUiState, controller: AgenriodController, modifi
                 }
                 CompactComposer(
                     value = editor,
-                    onValueChange = controller::updateDraft,
-                    onSend = { controller.send(listOfNotNull(pickedImage)); pickedImage = null },
-                    onStop = controller::abort,
+                    onValueChange = host::updateDraft,
+                    onSend = { host.send(listOfNotNull(pickedImage)); pickedImage = null },
+                    onStop = host::abort,
                     onVoice = {
                         if (listening) { recognizer?.stopListening(); listening = false }
                         else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) { listening = true; recognizer?.startListening(voiceIntent) }
@@ -354,26 +375,28 @@ private fun MessageBody(text: String) {
 }
 
 @Composable
-private fun SettingsPane(state: AgentUiState, controller: AgenriodController, modifier: Modifier = Modifier) {
+private fun SettingsPane(state: AgentUiState, host: AgentClient, modifier: Modifier = Modifier) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var config by remember(state.config) { mutableStateOf(state.config) }
     var hooks by remember(state.hooks) { mutableStateOf(state.hooks) }
     Column(modifier.fillMaxSize().padding(horizontal = 18.dp).imePadding()) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
-            TextButton(onClick = controller::toggleSettings) { Text("Done") }
+            TextButton(onClick = host::toggleSettings) { Text("Done") }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = state.settingsPage == "model", onClick = controller::openModelSettings, label = { Text("Model") })
-            FilterChip(selected = state.settingsPage == "plugins", onClick = controller::openPluginManager, label = { Text("Plugins") })
-            FilterChip(selected = state.settingsPage == "hooks", onClick = controller::openHooks, label = { Text("Hooks") })
+            FilterChip(selected = state.settingsPage == "model", onClick = host::openModelSettings, label = { Text("Model") })
+            FilterChip(selected = state.settingsPage == "plugins", onClick = host::openPluginManager, label = { Text("Plugins") })
+            FilterChip(selected = state.settingsPage == "hooks", onClick = host::openHooks, label = { Text("Hooks") })
         }
+        OutlinedButton(onClick = { context.startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS)) }, modifier = Modifier.fillMaxWidth()) { Text("Choose Agenriod as system assistant") }
         when (state.settingsPage) {
-            "plugins" -> PluginManagement(state, controller, Modifier.weight(1f))
+            "plugins" -> PluginManagement(state, host, Modifier.weight(1f))
             "hooks" -> HookSettings(hooks, { hooks = it }, Modifier.weight(1f))
             else -> ModelSettings(config, { config = it }, Modifier.weight(1f))
         }
-        if (state.settingsPage != "plugins") Button(onClick = { controller.updateConfig(config); controller.updateHooks(hooks); controller.saveSettings("") }, modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) { Text("Save settings") }
+        if (state.settingsPage != "plugins") Button(onClick = { host.updateConfig(config); host.updateHooks(hooks); host.saveSettings("") }, modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) { Text("Save settings") }
     }
 }
 
@@ -413,7 +436,7 @@ private fun HookSettings(hooks: String, onChange: (String) -> Unit, modifier: Mo
 }
 
 @Composable
-private fun PluginManagement(state: AgentUiState, controller: AgenriodController, modifier: Modifier) {
+private fun PluginManagement(state: AgentUiState, host: AgentClient, modifier: Modifier) {
     var manifest by remember { mutableStateOf("") }
     Column(modifier.padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Installed plugins", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -423,7 +446,7 @@ private fun PluginManagement(state: AgentUiState, controller: AgenriodController
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                     Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) { Text(plugin.name, fontWeight = FontWeight.SemiBold); Text("${plugin.toolCount} tools · ${plugin.id}", style = MaterialTheme.typography.labelSmall) }
-                        TextButton(onClick = { controller.deletePlugin(plugin.id) }) { Text("Delete") }
+                        TextButton(onClick = { host.deletePlugin(plugin.id) }) { Text("Delete") }
                     }
                 }
             }
@@ -431,7 +454,7 @@ private fun PluginManagement(state: AgentUiState, controller: AgenriodController
         HorizontalDivider()
         TextButton(onClick = { manifest = EXAMPLE_PLUGIN_MANIFEST }) { Text("Use example manifest") }
         OutlinedTextField(manifest, { manifest = it }, Modifier.fillMaxWidth(), minLines = 4, maxLines = 8, label = { Text("Plugin manifest JSON") })
-        Button(onClick = { controller.saveSettings(manifest); manifest = "" }, enabled = manifest.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Install plugin") }
+        Button(onClick = { host.saveSettings(manifest); manifest = "" }, enabled = manifest.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Install plugin") }
     }
 }
 
@@ -450,20 +473,39 @@ private val EXAMPLE_PLUGIN_MANIFEST = """
 """.trimIndent()
 
 @Composable
-private fun SessionPane(state: AgentUiState, controller: AgenriodController, modifier: Modifier) {
+private fun SessionPane(state: AgentUiState, host: AgentClient, modifier: Modifier) {
     Column(modifier.fillMaxSize().padding(horizontal = 18.dp)) {
         Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) { Text("Sessions", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold); Text("Switch or start a focused workspace conversation", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            Button(onClick = controller::newSession) { Text("New") }
+            Button(onClick = host::newSession) { Text("New") }
+        }
+        val recoverable = state.tasks.filter { it.status == "interrupted" || it.status == "failed" || it.status == "running" || it.status == "queued" }
+        if (recoverable.isNotEmpty()) {
+            Text("Tasks", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            recoverable.forEach { task -> TaskRecoveryRow(task, host) }
         }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
-            items(state.sessions, key = { it.id }) { session -> SessionRow(session, session.id == state.currentSession.id, controller) }
+            items(state.sessions, key = { it.id }) { session -> SessionRow(session, session.id == state.currentSession.id, host) }
         }
     }
 }
 
 @Composable
-private fun SessionRow(session: SessionSummary, selected: Boolean, controller: AgenriodController) {
+private fun TaskRecoveryRow(task: TaskSummary, host: AgentClient) {
+    Card(Modifier.fillMaxWidth().padding(vertical = 4.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+        Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(task.prompt, maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
+                Text(task.status + if (task.error.isBlank()) "" else " · ${task.error.take(80)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (task.status == "interrupted" || task.status == "failed") TextButton(onClick = { host.retryTask(task.id) }) { Text("Retry") }
+            if (task.status == "queued" || task.status == "running") TextButton(onClick = { host.cancelTask(task.id) }) { Text("Stop") }
+        }
+    }
+}
+
+@Composable
+private fun SessionRow(session: SessionSummary, selected: Boolean, host: AgentClient) {
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
     var title by remember(session.title) { mutableStateOf(session.title) }
@@ -475,12 +517,12 @@ private fun SessionRow(session: SessionSummary, selected: Boolean, controller: A
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = { renaming = true }) { Text("Rename") }
                 TextButton(onClick = { deleting = true }) { Text("Delete") }
-                TextButton(onClick = { controller.switchSession(session.id) }) { Text(if (selected) "Return" else "Open") }
+                TextButton(onClick = { host.switchSession(session.id) }) { Text(if (selected) "Return" else "Open") }
             }
         }
     }
-    if (renaming) AlertDialog(onDismissRequest = { renaming = false }, title = { Text("Rename session") }, text = { OutlinedTextField(title, { title = it }, singleLine = true) }, confirmButton = { TextButton(onClick = { controller.renameSession(session.id, title); renaming = false }) { Text("Save") } }, dismissButton = { TextButton(onClick = { renaming = false }) { Text("Cancel") } })
-    if (deleting) AlertDialog(onDismissRequest = { deleting = false }, title = { Text("Delete session?") }, text = { Text("The conversation “${session.title}” will be removed from this device.") }, confirmButton = { TextButton(onClick = { controller.deleteSession(session.id); deleting = false }) { Text("Delete") } }, dismissButton = { TextButton(onClick = { deleting = false }) { Text("Cancel") } })
+    if (renaming) AlertDialog(onDismissRequest = { renaming = false }, title = { Text("Rename session") }, text = { OutlinedTextField(title, { title = it }, singleLine = true) }, confirmButton = { TextButton(onClick = { host.renameSession(session.id, title); renaming = false }) { Text("Save") } }, dismissButton = { TextButton(onClick = { renaming = false }) { Text("Cancel") } })
+    if (deleting) AlertDialog(onDismissRequest = { deleting = false }, title = { Text("Delete session?") }, text = { Text("The conversation “${session.title}” will be removed from this device.") }, confirmButton = { TextButton(onClick = { host.deleteSession(session.id); deleting = false }) { Text("Delete") } }, dismissButton = { TextButton(onClick = { deleting = false }) { Text("Cancel") } })
 }
 
 @Composable

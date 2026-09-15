@@ -30,6 +30,7 @@ class NativeAgentBridge(
     private val onEvent: (String) -> Unit,
 ) {
     private val workspace: Path = appContext.filesDir.toPath().resolve("workspace").also { Files.createDirectories(it) }
+    private val externalPlugins = AndroidPluginRegistry(appContext)
     private val pluginsDir: Path = appContext.filesDir.toPath().resolve("plugins").also { Files.createDirectories(it) }
     @Volatile private var activeConnection: HttpURLConnection? = null
     @Volatile private var activeProcess: Process? = null
@@ -53,11 +54,11 @@ class NativeAgentBridge(
         stream.filter { it.toString().endsWith(".json") }.findFirst().map { it.toFile().readText() }.orElse("")
     }
 
-    fun listPlugins(): List<JSONObject> = runCatching {
+    fun listPlugins(): List<JSONObject> = (runCatching {
         Files.list(pluginsDir).use { stream -> stream.filter { it.toString().endsWith(".json") }.iterator().asSequence().toList().mapNotNull { file: Path ->
             runCatching { JSONObject(file.toFile().readText()) }.getOrNull()
         } }
-    }.getOrDefault(emptyList())
+    }.getOrDefault(emptyList()) + externalPlugins.list()).distinctBy { it.optString("id") }
 
     fun deletePlugin(id: String): Boolean = runCatching {
         require(id.matches(Regex("[A-Za-z0-9._-]+"))) { "Invalid plugin id" }
@@ -265,21 +266,12 @@ class NativeAgentBridge(
         return Regex("^$regex$").matches(value.replace('\\', '/'))
     }
 
-    private fun pluginsJson(): String {
-        val output = JSONArray()
-        Files.list(pluginsDir).use { stream -> stream.filter { it.toString().endsWith(".json") }.forEach { file ->
-            runCatching {
-                val json = JSONObject(file.toFile().readText())
-                json.put("id", json.optString("id").ifBlank { file.fileName.toString().removeSuffix(".json") })
-                output.put(json)
-            }
-        } }
-        return output.toString()
-    }
+    private fun pluginsJson(): String = JSONArray().apply { listPlugins().forEach { put(it) } }.toString()
 
     private fun plugin(input: JSONObject): String {
         val id = input.optString("pluginId")
         require(id.matches(Regex("[A-Za-z0-9._-]+"))) { "Invalid plugin id" }
+        if (externalPlugins.has(id)) return result(externalPlugins.invoke(id, input.optString("tool"), input.optJSONObject("args") ?: JSONObject()))
         val file = pluginsDir.resolve("$id.json")
         require(Files.exists(file)) { "Plugin not found: $id" }
         val manifest = JSONObject(file.toFile().readText())
