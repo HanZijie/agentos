@@ -89,7 +89,7 @@ class AgentHost(private val context: Context) {
         reload()
     }
     fun deletePlugin(id: String) { if (!_state.value.isRunning) { bridge.deletePlugin(id); reload() } }
-    fun refreshPlugins() = reload()
+    fun refreshPlugins() { bridge.refreshExternalPlugins(); reload() }
     private suspend fun refreshCatalog() {
         skills = skillCatalog.load()
         val plugins = withContext(Dispatchers.IO) { bridge.pluginCatalog() }.mapNotNull { json ->

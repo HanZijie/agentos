@@ -7,10 +7,12 @@ import com.example.agenriod.plugin.PluginProcessRegistration
 class NotesApplication : Application() {
     lateinit var endpoint: NotesPluginEndpoint
         private set
+    private lateinit var mcp: NotesMcpServer
     private lateinit var registration: PluginProcessRegistration
     override fun onCreate() {
         super.onCreate()
-        endpoint = NotesPluginEndpoint(this)
+        mcp = NotesMcpServer(NotesRepository(this))
+        endpoint = NotesPluginEndpoint(this, mcp.configuration)
         registration = PluginProcessRegistration(this, endpoint)
     }
 }

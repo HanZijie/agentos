@@ -69,7 +69,8 @@ class AgentService : Service() {
                 host.submit(json.getString("text"), (0 until (images?.length() ?: 0)).map { images!!.getJSONObject(it).let { image -> ImageAttachment(image.getString("base64"), image.getString("mimeType")) } }, json.getString("id"))
             }
             "abort" -> host.abort()
-            "reload", "refreshPlugins" -> host.reload()
+            "reload" -> host.reload()
+            "refreshPlugins" -> host.refreshPlugins()
             "saveSettings" -> host.saveSettings(json.getJSONObject("config").toModelConfig(), json.optString("hooks"), json.optString("manifest"))
             "deletePlugin" -> host.deletePlugin(json.getString("id"))
             "newSession" -> host.newSession()

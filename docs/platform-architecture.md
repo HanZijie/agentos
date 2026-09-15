@@ -27,6 +27,8 @@ Android requires `android.permission.BIND_VOICE_INTERACTION` on both declaration
 
 `runtime/plugin-interface.mjs` defines the same descriptor/invoke shape for Node. `runtime/plugins/notes-node` is a reference implementation and `node runtime/plugin-contract-test.mjs` verifies its descriptor, update, and search behavior. Node is one adapter, not a dependency of every plugin app.
 
+See [plugin-lifecycle-mcp.md](plugin-lifecycle-mcp.md) for the process-liveness activation contract and Streamable HTTP MCP boundary.
+
 ## File Broker
 
 `file-broker` is an Android library with `AndroidFileBroker`. It creates `ACTION_OPEN_DOCUMENT` / `ACTION_CREATE_DOCUMENT` intents, persists URI permissions, and reads/writes through `ContentResolver`. It rejects non-`content://` references and caps reads. The existing `NativeAgentBridge` workspace tools remain app-private and path-confined; external document access is a separate module and seam.

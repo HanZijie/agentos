@@ -1,0 +1,21 @@
+package com.example.agenriod.mcp
+
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import org.json.JSONObject
+import org.junit.Assert.*
+import org.junit.Test
+import org.junit.runner.RunWith
+
+@RunWith(AndroidJUnit4::class)
+class McpSdkInteropTest {
+    @Test(timeout = 20000)
+    fun talksToOfficialTypeScriptSdkStreamableHttpServer() {
+        val port = InstrumentationRegistry.getArguments().getString("port")?.toIntOrNull() ?: error("-e port is required")
+        McpHttpSession(JSONObject().put("url", "http://127.0.0.1:$port/mcp")).use { client ->
+            assertEquals(listOf("greet"), client.listTools().map { it.getString("name") })
+            val result = client.callTool("greet", JSONObject().put("name", "Agenriod"))
+            assertEquals("Hello Agenriod", result.getJSONArray("content").getJSONObject(0).getString("text"))
+        }
+    }
+}

@@ -230,7 +230,7 @@ app/src/main/assets/agenriod-agent.js
 ./scripts/android.sh ui
 ./scripts/android.sh gradle :app:testDebugUnitTest
 ./scripts/android.sh gradle :app:lintDebug
-./scripts/android.sh gradle :app:connectedDebugAndroidTest
+./scripts/android.sh instrumentation
 ```
 
 ## 测试边界
@@ -242,6 +242,8 @@ app/src/main/assets/agenriod-agent.js
 - `SessionStoreTest`：Session 隔离、Pi transcript 恢复和挂起模型请求中断。
 - `ExampleInstrumentedTest`：Android Keystore API key 回环。
 - `ExampleUnitTest`：基础 JVM 单元测试。
+- `NotesPluginCrossAppTest`：Plugin 进程存活门控、Host 重启重注册和 Notes MCP 工具。
+- `McpHttpSessionTest` / `McpSdkInteropTest`：Streamable HTTP JSON/SSE、Session 过期、取消与官方 TypeScript SDK 互操作。
 
 这些测试验证本地 Agent、输入和存储边界。它们不会用真实 API key 发起模型请求；真实 provider 的可用性仍取决于 endpoint、model id、账号权限和设备网络。
 

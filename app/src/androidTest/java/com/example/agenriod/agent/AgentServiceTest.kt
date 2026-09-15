@@ -92,6 +92,49 @@ class AgentServiceTest {
         }
     }
 
+    @Test(timeout = 45000)
+    fun agentExecutesMcpToolFromBackgroundPlugin() {
+        val scenario = ActivityScenario.launch(MainActivity::class.java)
+        val connection = Connection().also { it.connect() }
+        val original = connection.awaitState { true }
+        var session = ""
+        ModelToolFixture { request, index ->
+            if (index == 1) {
+                val tools = request.getJSONArray("tools")
+                val name = (0 until tools.length()).map { tools.getJSONObject(it).getJSONObject("function").getString("name") }
+                    .first { it.contains("mcp_notes_notes_stats") }
+                JSONObject().put("role", "assistant").put("content", JSONObject.NULL).put("tool_calls", org.json.JSONArray().put(
+                    JSONObject().put("id", "mcp-call").put("type", "function").put("function", JSONObject().put("name", name).put("arguments", "{}"))))
+            } else {
+                val messages = request.getJSONArray("messages")
+                assertTrue("Model must receive MCP tool output", (0 until messages.length()).map { messages.getJSONObject(it) }.any { it.optString("role") == "tool" && it.optString("content").contains("noteCount") })
+                JSONObject().put("role", "assistant").put("content", "MCP pipeline verified")
+            }
+        }.use { server ->
+            try {
+                PluginBrokerTestClient.shell("am start -W -n com.example.agenriod.notes/.MainActivity")
+                PluginBrokerTestClient.shell("am start -W -n com.example.agenriod/.MainActivity")
+                connection.awaitState { it.plugins.any { plugin -> plugin.id == "notes" && plugin.toolCount == 3 } }
+                connection.command("newSession")
+                session = connection.awaitState { it.currentSession.id != original.currentSession.id }.currentSession.id
+                connection.command("saveSettings", JSONObject().put("config", ModelConfig(baseUrl = server.url, apiKey = "", model = "local-mcp-test").toJson()).put("hooks", ""))
+                val id = UUID.randomUUID().toString()
+                connection.command("send", JSONObject().put("id", id).put("text", "Count notes through MCP"))
+                val final = connection.awaitState(20000) { it.tasks.any { task -> task.id == id && task.status in listOf("completed", "failed") } }
+                server.assertHealthy()
+                assertEquals("completed", final.tasks.first { it.id == id }.status)
+                assertTrue(final.messages.any { it.role == "tool" && it.text.contains("noteCount") && !it.isError })
+                assertTrue(final.messages.any { it.text == "MCP pipeline verified" })
+                assertEquals(2, server.requests)
+            } finally {
+                runCatching { connection.command("abort"); if (session.isNotEmpty()) connection.command("deleteSession", JSONObject().put("id", session)) }
+                runCatching { connection.command("saveSettings", JSONObject().put("config", original.config.toJson()).put("hooks", original.hooks)); connection.command("switchSession", JSONObject().put("id", original.currentSession.id)) }
+                PluginBrokerTestClient.shell("am force-stop com.example.agenriod.notes")
+                connection.close(); scenario.close()
+            }
+        }
+    }
+
     private inner class Connection : ServiceConnection {
         lateinit var remote: IAgentService
         private val connected = CountDownLatch(1)

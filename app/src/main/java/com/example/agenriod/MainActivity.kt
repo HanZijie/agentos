@@ -97,6 +97,7 @@ import com.example.agenriod.ui.shortcutWord
 import com.example.agenriod.ui.insertShortcut
 import com.example.agenriod.ui.CompactComposer
 import kotlinx.coroutines.launch
+import androidx.compose.ui.platform.LocalContext
 
 class MainActivity : ComponentActivity() {
     private lateinit var client: AgentClient
@@ -437,15 +438,22 @@ private fun HookSettings(hooks: String, onChange: (String) -> Unit, modifier: Mo
 
 @Composable
 private fun PluginManagement(state: AgentUiState, host: AgentClient, modifier: Modifier) {
+    val context = LocalContext.current
     var manifest by remember { mutableStateOf("") }
     Column(modifier.padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Installed plugins", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Installed plugins", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            TextButton(onClick = host::refreshPlugins) { Text("Refresh") }
+        }
         if (state.plugins.isEmpty()) Text("No plugins yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
         else LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(state.plugins, key = { it.id }) { plugin ->
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                     Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) { Text(plugin.name, fontWeight = FontWeight.SemiBold); Text("${plugin.toolCount} tools · ${plugin.id}", style = MaterialTheme.typography.labelSmall); Text(plugin.status, style = MaterialTheme.typography.labelSmall) }
+                        if (!plugin.active && plugin.packageName.isNotBlank()) TextButton(onClick = {
+                            context.packageManager.getLaunchIntentForPackage(plugin.packageName)?.let { context.startActivity(it) }
+                        }) { Text("Open app") }
                         if (plugin.packageName.isBlank()) TextButton(onClick = { host.deletePlugin(plugin.id) }) { Text("Delete") }
                     }
                 }

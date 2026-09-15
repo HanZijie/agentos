@@ -54,6 +54,7 @@ class NativeAgentBridge(
         stream.filter { it.toString().endsWith(".json") }.findFirst().map { it.toFile().readText() }.orElse("")
     }
 
+    fun refreshExternalPlugins() = externalPlugins.refresh()
     val pluginChanges get() = externalPlugins.changes
 
     fun listPlugins(): List<JSONObject> = pluginCatalog().filter { it.optBoolean("active", true) }
@@ -275,7 +276,10 @@ class NativeAgentBridge(
     private fun plugin(input: JSONObject): String {
         val id = input.optString("pluginId")
         require(id.matches(Regex("[A-Za-z0-9._-]+"))) { "Invalid plugin id" }
-        if (externalPlugins.has(id)) return result(externalPlugins.invoke(id, input.optString("tool"), input.optJSONObject("args") ?: JSONObject()))
+        if (externalPlugins.has(id)) {
+            val response = JSONObject(externalPlugins.invoke(id, input.optString("tool"), input.optJSONObject("args") ?: JSONObject()))
+            return if (response.has("content")) response.toString() else result(response.toString())
+        }
         val file = pluginsDir.resolve("$id.json")
         require(Files.exists(file)) { "Plugin not found: $id" }
         val manifest = JSONObject(file.toFile().readText())

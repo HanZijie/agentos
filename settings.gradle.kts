@@ -23,4 +23,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Agenriod"
-include(":app", ":plugin-api", ":notes-plugin", ":file-broker")
+include(":app", ":plugin-api", ":notes-plugin", ":file-broker", ":mcp-client")

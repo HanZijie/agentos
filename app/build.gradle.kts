@@ -43,6 +43,7 @@ android {
 
 dependencies {
     implementation(project(":plugin-api"))
+    implementation(project(":mcp-client"))
     implementation(project(":file-broker"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)

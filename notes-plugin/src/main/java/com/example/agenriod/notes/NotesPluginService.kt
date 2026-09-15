@@ -13,11 +13,11 @@ class NotesPluginService : Service() {
     override fun onBind(intent: Intent?): IBinder = (application as NotesApplication).endpoint
 }
 
-class NotesPluginEndpoint(context: Context) : AgentPluginService.Stub() {
+class NotesPluginEndpoint(context: Context, private val mcp: JSONObject) : AgentPluginService.Stub() {
     private val repository = NotesRepository(context)
         // Named PLUGIN_DESCRIPTOR: inside Stub, `DESCRIPTOR` resolves to the
         // AIDL-generated interface-name constant and would shadow ours.
-        override fun describe(): String = PLUGIN_DESCRIPTOR
+        override fun describe(): String = JSONObject(PLUGIN_DESCRIPTOR).put("protocolVersion", 2).put("mcpServers", JSONArray().put(mcp)).toString()
         override fun invoke(tool: String, argsJson: String): String = runCatching {
             val args = JSONObject(argsJson)
             when (tool) {

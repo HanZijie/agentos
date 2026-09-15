@@ -20,6 +20,7 @@ Usage: ./scripts/android.sh <command> [arguments]
   ui [path]            Save UI hierarchy (default: build/codex/ui.xml)
   adb <arguments>      Run ADB on the selected device (e.g. shell input tap X Y)
   gradle <arguments>   Run the project's Gradle wrapper with the Android JDK
+  instrumentation      Build/install the Notes plugin and run device tests
 
 Optional overrides: ANDROID_AVD (default Pixel_8a), ANDROID_SERIAL,
 ANDROID_HOME, JAVA_HOME, ANDROID_APP_ID, ANDROID_ACTIVITY.
@@ -151,6 +152,39 @@ case "$COMMAND" in
         gradle :app:assembleDebug "$@"
         "$ADB" -s "$SERIAL" install -r "$PROJECT_ROOT/app/build/outputs/apk/debug/app-debug.apk"
         "$ADB" -s "$SERIAL" shell am start -W -S -n "$ACTIVITY"
+        ;;
+    instrumentation)
+        start_device
+        build_agent
+        gradle :notes-plugin:assembleDebug :app:assembleDebugAndroidTest "$@"
+        "$ADB" -s "$SERIAL" install -r "$PROJECT_ROOT/notes-plugin/build/outputs/apk/debug/notes-plugin-debug.apk"
+        FIXTURE_LOG="$OUTPUT_DIR/mcp-sdk-fixture.log"
+        FIXTURE_PID=''
+        cleanup_fixture() {
+            if [[ -n "$FIXTURE_PID" ]]; then
+                kill "$FIXTURE_PID" 2>/dev/null || true
+                wait "$FIXTURE_PID" 2>/dev/null || true
+            fi
+        }
+        trap cleanup_fixture EXIT
+        node "$PROJECT_ROOT/runtime/mcp-sdk-fixture.mjs" >"$FIXTURE_LOG" 2>&1 &
+        FIXTURE_PID=$!
+        fixture_port=''
+        for _ in $(seq 1 50); do
+            fixture_port="$(sed -n 's/^PORT=//p' "$FIXTURE_LOG" | head -n 1)"
+            [[ -n "$fixture_port" ]] && break
+            sleep 0.1
+        done
+        [[ -n "$fixture_port" ]] || fail "MCP SDK fixture did not start; inspect $FIXTURE_LOG"
+        "$ADB" -s "$SERIAL" reverse "tcp:$fixture_port" "tcp:$fixture_port" >/dev/null
+        if gradle :app:connectedDebugAndroidTest "-Pandroid.testInstrumentationRunnerArguments.port=$fixture_port" "$@"; then
+            status=0
+        else
+            status=$?
+        fi
+        trap - EXIT
+        cleanup_fixture
+        exit "$status"
         ;;
     logs)
         require_device

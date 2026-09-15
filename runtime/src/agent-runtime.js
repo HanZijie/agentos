@@ -71,9 +71,16 @@ const tool = (name, description, parameters, method = name) => ({
   },
 });
 
+function pluginToolName(pluginId, toolName) {
+  const key = JSON.stringify([pluginId, toolName]);
+  let hash = 14695981039346656037n;
+  for (let i = 0; i < key.length; i++) hash = BigInt.asUintN(64, (hash ^ BigInt(key.charCodeAt(i))) * 1099511628211n);
+  return `plugin_${pluginId}_${toolName}`.replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 46) + "_" + hash.toString(16).padStart(16, "0");
+}
+
 function pluginTools(plugins) {
   return (plugins ?? []).filter((plugin) => plugin.active !== false).flatMap((plugin) => (plugin.tools ?? []).filter((item) => item.enabled !== false).map((item) => {
-    const name = `plugin_${plugin.id}_${item.name}`.replace(/[^a-zA-Z0-9_]/g, "_");
+    const name = pluginToolName(plugin.id, item.name);
     return {
       name,
       label: item.name,
@@ -88,6 +95,12 @@ function pluginTools(plugins) {
         if (signal?.aborted) throw new Error("Operation aborted");
         const result = await call("plugin", { pluginId: plugin.id, tool: item.name, args });
         if (result?.error) throw new Error(result.error);
+        if (result?.isError) throw new Error((result.content ?? []).filter((item) => item.type === "text").map((item) => item.text).join("\n") || "MCP tool failed");
+        if (Array.isArray(result?.content)) {
+          const content = result.content.map((item) => item.type === "text" || item.type === "image" ? item : { type: "text", text: JSON.stringify(item) });
+          if (result.structuredContent && !content.some((item) => item.type === "text")) content.push({ type: "text", text: JSON.stringify(result.structuredContent) });
+          return { content, details: result.structuredContent };
+        }
         return textResult(result?.text ?? result ?? "(no output)");
       },
     };
