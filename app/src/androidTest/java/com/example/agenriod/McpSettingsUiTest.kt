@@ -21,4 +21,5 @@ class McpSettingsUiTest {
         compose.onNodeWithText("Headers JSON (optional)").assertIsDisplayed()
         compose.onNodeWithText("Add MCP server").assertIsNotEnabled()
     }
+
 }

@@ -98,6 +98,7 @@ import com.example.agenriod.ui.insertShortcut
 import com.example.agenriod.ui.CompactComposer
 import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -466,9 +467,9 @@ private fun PluginManagement(state: AgentUiState, host: AgentClient, modifier: M
         item { HorizontalDivider() }
         item { Text("Add Streamable HTTP MCP", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
         item { Text("The server address and transport are added to an app-private Plugin manifest. Authentication headers stay app-private and are never put in the System Prompt.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        item { SettingField("Server id", mcpId) { mcpId = it } }
-        item { SettingField("MCP URL (HTTPS or loopback HTTP)", mcpUrl) { mcpUrl = it } }
-        item { OutlinedTextField(mcpHeaders, { mcpHeaders = it }, Modifier.fillMaxWidth(), label = { Text("Headers JSON (optional)") }, minLines = 1, maxLines = 3, isError = !headersValid) }
+        item { OutlinedTextField(mcpId, { mcpId = it }, Modifier.fillMaxWidth().testTag("mcp_server_id"), label = { Text("Server id") }) }
+        item { OutlinedTextField(mcpUrl, { mcpUrl = it }, Modifier.fillMaxWidth().testTag("mcp_server_url"), label = { Text("MCP URL (HTTPS or loopback HTTP)") }) }
+        item { OutlinedTextField(mcpHeaders, { mcpHeaders = it }, Modifier.fillMaxWidth().testTag("mcp_server_headers"), label = { Text("Headers JSON (optional)") }, minLines = 1, maxLines = 3, isError = !headersValid) }
         item { Button(enabled = mcpId.matches(Regex("[A-Za-z0-9_-]{1,32}")) && mcpUrl.isNotBlank() && headersValid, onClick = {
             val server = JSONObject().put("id", mcpId).put("transport", "streamable-http").put("url", mcpUrl.trim())
             if (mcpHeaders.isNotBlank()) server.put("headers", JSONObject(mcpHeaders))

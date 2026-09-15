@@ -66,7 +66,11 @@ class NativeAgentBridge(
             Files.list(pluginsDir).use { stream -> stream.filter { it.toString().endsWith(".json") }.iterator().asSequence().toList()
                 .mapNotNull { file -> runCatching { JSONObject(file.toFile().readText()) }.getOrNull() } }
         }.getOrDefault(emptyList())
-        val localDescriptors = runCatching { localMcp.refresh(local) }.getOrDefault(local)
+        val localDescriptors = runCatching { localMcp.refresh(local) }.getOrElse {
+            local.map { manifest -> JSONObject(manifest.toString()).apply {
+                remove("mcpServers"); put("active", true); put("status", "Active · MCP unavailable; fix manifest and refresh")
+            } }
+        }
         return (localDescriptors.filterNot { externalPlugins.has(it.optString("id")) } + externalPlugins.catalog()).distinctBy { it.optString("id") }
     }
 

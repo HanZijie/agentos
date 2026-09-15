@@ -25,9 +25,15 @@ internal class LocalMcpRegistry {
         }
     }
 
-    @Synchronized fun refresh(manifests: List<JSONObject>): List<JSONObject> {
-        val nextIds = manifests.map { it.optString("id") }.toSet()
-        entries.keys.filter { it !in nextIds }.toList().forEach { entries.remove(it)?.sessions?.values?.forEach(McpHttpSession::close) }
+    @Synchronized fun refresh(manifests: List<JSONObject>): List<JSONObject> = refreshInternal(manifests, prune = true)
+
+    @Synchronized private fun refreshOne(manifest: JSONObject) = refreshInternal(listOf(manifest), prune = false).single()
+
+    private fun refreshInternal(manifests: List<JSONObject>, prune: Boolean): List<JSONObject> {
+        if (prune) {
+            val nextIds = manifests.map { it.optString("id") }.toSet()
+            entries.keys.filter { it !in nextIds }.toList().forEach { entries.remove(it)?.sessions?.values?.forEach(McpHttpSession::close) }
+        }
         return manifests.map { manifest ->
             val id = manifest.optString("id")
             val configs = manifest.optJSONArray("mcpServers") ?: JSONArray()
@@ -67,7 +73,7 @@ internal class LocalMcpRegistry {
         val server = entry.sessions[serverId] ?: error("MCP server is unavailable: $serverId")
         val original = tool.removePrefix("mcp.$serverId.")
         val result = server.callTool(original, args).toString()
-        if (server.toolsChanged) refresh(listOf(entry.manifest))
+        if (server.toolsChanged) refreshOne(entry.manifest)
         return result
     }
 
