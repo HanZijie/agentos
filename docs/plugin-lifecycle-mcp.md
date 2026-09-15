@@ -32,7 +32,7 @@ Version 1 native tools remain supported. Version 2 may add `mcpServers` without 
 }
 ```
 
-MCP credentials stay in the registered process and are used only by its Host-side session. The catalog exposes tool schemas and an active status, not the MCP endpoint or headers. Native and MCP tool names are kept in separate namespaces (`mcp.<server>.<tool>` internally); the bundled runtime gives every tool a bounded, deterministic model name.
+MCP credentials stay in the Host's in-memory registration record and are used only by its MCP session. The public catalog exposes tool schemas and an active status, not the MCP endpoint or headers. Native and MCP tool names are kept in separate namespaces (`mcp.<server>.<tool>` internally); the bundled runtime gives every tool a bounded, deterministic model name.
 
 ## Streamable HTTP MCP
 
