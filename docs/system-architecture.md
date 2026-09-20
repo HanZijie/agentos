@@ -34,6 +34,14 @@ System UI / App
 
 `system_server` 不运行 QuickJS、模型请求、第三方 Plugin 或任意 shell。`sideagentd` 使用专用 Linux UID 和 SELinux domain；它不是 root，也不是 system UID。系统通过 init 负责进程重启，通过 AgentManagerService 负责 Binder 重连和状态恢复。
 
+## 远期运行模型
+
+Agent 应作为系统服务和常驻进程存在，由系统负责启动、监管、恢复和资源边界。前端只是 ACP/Binder 等入口的客户端，前端退出不改变 Agent 的 Session、任务和事件事实。
+
+Plugin 应被理解为 App 运行时向 Agent 系统进程注入的运行时变量和受控 capability 声明。Plugin 代码留在提供它的 App UID 和进程内；`sideagentd` 接收经系统校验的描述、参数和调用结果，不加载第三方代码到 `system_server` 或 `sideagentd`。
+
+这个模型的核心工程难点是 Session 调度。调度器需要在多个 User、前端、Session、Plugin capability 和 Agent worker 之间处理排队、优先级、公平性、并发上限、取消、超时、背压、断线、Plugin death 和 daemon 重启恢复。Session Store、Task Store、事件 sequence 和 capability lease 都应围绕这些调度语义设计。
+
 ## 系统接口
 
 系统接口分为三条 seam。跨前端的逻辑请求、响应和事件语义定义在 [Agent Bus v1](../system/agent/contracts/agent-bus-v1.md)；Android AIDL 和本地 reference transport 都应实现这套语义。

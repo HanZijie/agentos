@@ -8,6 +8,13 @@
 - 任意 App 通过稳定系统接口接入 Agent。前端不拥有任务、Session 或事件日志的事实来源。
 - 第三方 Plugin 在自己的 UID 和进程中执行；系统侧只保存注册状态和受控能力会话。
 
+## 远期目标
+
+- Agent 的目标形态是系统启动和监管的系统服务与常驻进程。它独立于 Activity、前台服务和普通 App 的生命周期；Session、任务和事件日志的事实来源属于系统侧。
+- Plugin 是 App 运行时向 Agent 系统进程注入的运行时变量和受控能力声明，不等于把第三方代码加载到系统进程。Plugin 代码保留在提供它的 App UID 和进程中，系统只接收经过身份、签名、权限和 capability policy 校验的描述、参数和结果。
+- Session 调度是主要难点。设计必须说明多个 User、前端、Session、Plugin capability 和 Agent worker 如何排队、限流、取消、恢复和公平执行，并处理断线、背压、Plugin death 和 `sideagentd` 重启；不能把 Session 设计成 Activity 的内存状态或单个前端的私有对象。
+- 讨论远期目标时区分理念和实现：常驻 Agent、运行时 Plugin 注入是设计方向；worker 数量、调度算法、存储实现和恢复策略仍需通过具体约束验证。
+
 ## 表达
 
 - 区分已验证事实、设计选择和待验证假设。

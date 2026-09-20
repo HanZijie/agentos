@@ -32,6 +32,14 @@ System UI / Voice / 任意 App
 
 `system_server` 只负责系统契约、权限和路由，不执行模型循环、QuickJS、网络请求或第三方 Plugin 代码。`sideagentd` 使用专用 UID 和 SELinux domain，由 `init` 启动；它崩溃时由系统重启，状态从任务存储和事件日志恢复。
 
+## 远期目标
+
+Agent 的目标形态是一个由系统启动、监管和恢复的系统服务与常驻进程。它不属于某个 Activity、前台服务或普通 App；前端可以退出、切换或重连，而 Agent 的 Session、任务和事件事实仍由系统侧持有。
+
+Plugin 的目标形态是 App 运行时向 Agent 系统进程注入的运行时变量和受控能力声明。Plugin 的代码继续运行在提供它的 App UID 和进程中，Agent 只接收经过身份、签名、权限和 capability policy 校验的描述、参数和调用结果，不把第三方代码加载进 `system_server` 或 `sideagentd`。
+
+这里最难的部分不是把 Agent 进程常驻起来，而是 Session 调度：系统需要在多个用户、前端、Session、Plugin capability 和 Agent worker 之间分配执行机会，处理优先级、公平性、取消、超时、背压、前端断线、Plugin 进程死亡和 daemon 重启后的恢复。后续接口和存储设计应优先服务于这个调度模型，而不是把 Session 当成某个前端的临时对象。
+
 ## 输出管道
 
 Agent 的事实来源是系统侧 Session 和事件日志，不是某个 Activity 的内存状态。前端通过 AgentManagerService 订阅事件：
