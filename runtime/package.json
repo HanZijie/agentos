@@ -4,9 +4,12 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "test:plugin": "node plugin-contract-test.mjs"
+    "test:plugin": "node plugin-contract-test.mjs",
+    "test:acp": "node --test acp-adapter-test.mjs",
+    "start:acp": "node src/acp-adapter.js"
   },
   "dependencies": {
+    "@agentclientprotocol/sdk": "^1.4.0",
     "@earendil-works/pi-agent-core": "^0.85.1",
     "@earendil-works/pi-ai": "^0.85.1",
     "@earendil-works/pi-coding-agent": "^0.85.1",

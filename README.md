@@ -65,6 +65,8 @@ tools/android/            本地 Android 构建、设备测试和调试脚本
 docs/                     架构、迁移和开发文档
 ```
 
+Pi 的 ACP v1 stdio 适配器见 [`docs/acp-pi-adapter.md`](docs/acp-pi-adapter.md)。
+
 ## 当前实现与目标的关系
 
 当前 Android 原型中的 `AgentHost`、`PiRuntime`、Session 事件归约、MCP 协议和 Plugin Binder 契约会被保留为迁移素材。`AgentService`、app-private 任务队列、Activity 内的 UI 状态和本地 shell Plugin 不是最终系统架构。
@@ -91,6 +93,7 @@ npm ci --prefix runtime
 node runtime/build.mjs
 node runtime/plugin-contract-test.mjs
 node runtime/runtime-plugin-test.mjs
+npm run test:acp --prefix runtime
 ```
 
 Android 原型的设备测试仍使用本地 `Pixel_8a` AVD。系统组件的编译和 Cuttlefish 验证会在 `platform/checkout` 可用后加入 CI 矩阵。

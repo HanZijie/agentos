@@ -52,6 +52,7 @@ jobs:
         run: |
           npm ci --prefix runtime --no-audit --no-fund
           node runtime/build.mjs
+          npm run test:acp --prefix runtime
           node runtime/plugin-contract-test.mjs
           node runtime/runtime-plugin-test.mjs
           node tools/android/anthropic-env-test.mjs
