@@ -49,6 +49,8 @@ For `task.failed`, the envelope includes a structured error:
 - `tool_execution_start`, `tool_execution_update`, `tool_execution_end`
 - `queue_update`, `compaction_start`, `compaction_end`
 - `task.cancel_requested`, `task.cancelled`, `task.failed`
+- `session.state_changed`, `task.queued`, `task.started`, `task.completed`, `task.recovery_required`
+- `capability.lease_granted`, `capability.lease_revoked`
 
 ## Rules
 

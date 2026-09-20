@@ -8,6 +8,7 @@
 - [x] 写下 AgentManager、sideagentd 和输出事件流的职责。
 - [x] 把 Agent Bus 和输出事件协议固化成版本化协议文档。
 - [x] 定义任务状态、错误分类、取消和重连语义。
+- [x] 冻结 Session 状态、调度、公平性、并发、恢复和 Plugin capability lease 契约。
 
 ## M1：sideagentd 骨架
 

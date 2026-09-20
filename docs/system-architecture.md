@@ -42,6 +42,8 @@ Plugin 应被理解为 App 运行时向 Agent 系统进程注入的运行时变�
 
 这个模型的核心工程难点是 Session 调度。调度器需要在多个 User、前端、Session、Plugin capability 和 Agent worker 之间处理排队、优先级、公平性、并发上限、取消、超时、背压、断线、Plugin death 和 daemon 重启恢复。Session Store、Task Store、事件 sequence 和 capability lease 都应围绕这些调度语义设计。
 
+上述语义由 [Session Scheduling Contract v1](../system/agent/contracts/session-scheduling-v1.md) 冻结。该契约将 Session 的状态机与 Task 的一次执行分开，并规定同一 Session 串行、不同 Session 受全局和 User 并发上限约束；实现可以替换 Scheduler 和 Store，但不能改变回执、事件顺序、Snapshot 恢复或 lease 撤销语义。
+
 ## 系统接口
 
 系统接口分为三条 seam。跨前端的逻辑请求、响应和事件语义定义在 [Agent Bus v1](../system/agent/contracts/agent-bus-v1.md)；Android AIDL 和本地 reference transport 都应实现这套语义。

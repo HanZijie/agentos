@@ -10,6 +10,8 @@ Agent Bus 是 Android 系统 Agent 与多个前端之间的逻辑协议。它定
 
 Agent Bus 不直接复制这些项目的私有协议。Pi 的 RPC 面向父进程驱动单个 Agent，DeepSeek Harness 的 SDK 协议面向 Harness runtime 客户端；Agent Bus 还必须处理 Android 的用户身份、权限、多前端订阅、事件游标和系统级恢复。
 
+Session 的状态机、调度、公平性、并发上限、取消、超时、重启恢复和 Plugin capability lease 由配套的 [Session Scheduling Contract v1](session-scheduling-v1.md) 冻结。本文只定义消息名称和传输无关的调用形状；两份契约必须一起实现。
+
 ## 1. 传输和分层
 
 Agent Bus 先定义与传输无关的逻辑消息，再由不同部署提供适配器：
@@ -247,10 +249,11 @@ v1 保留：
 session/snapshot
 session/unsubscribe
 session/detach
+session/close       有权 controller 或系统控制面显式关闭 Session
 ping
 ```
 
-前端只有 `detach`，没有 `shutdown`。前端断开不能关闭系统 Agent。
+前端只有 `detach`，没有 daemon `shutdown`。`session/close` 只关闭一个 Session，必须遵守 [Session Scheduling Contract v1](session-scheduling-v1.md)；前端断开不能关闭系统 Agent，也不能隐式关闭 Session。
 
 ## 4. 输出事件
 
@@ -306,6 +309,18 @@ auto_retry_end
 task.cancel_requested
 task.cancelled
 task.failed
+
+调度契约另外要求持久化以下事件：
+
+```text
+session.state_changed
+task.queued
+task.started
+task.completed
+task.recovery_required
+capability.lease_granted
+capability.lease_revoked
+```
 ```
 
 需要区分：
@@ -343,6 +358,9 @@ task.failed
 -32007 plugin_unavailable
 -32008 request_conflict
 -32009 task_not_found
+-32010 session_terminal
+-32011 scheduler_backpressure
+-32012 recovery_required
 ```
 
 错误数据：
