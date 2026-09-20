@@ -1,4 +1,6 @@
-# Agenriod agent runtime
+# Legacy Agenriod runtime reference
+
+This document describes the embedded QuickJS runtime kept in `frontends/agenriod` during migration. It is not the target system host. The target Agent runtime belongs in `system/agent/sideagentd` and is consumed through Agent Bus by frontends.
 
 Agenriod runs the upstream `@earendil-works/pi-agent-core` `Agent` loop in a
 QuickJS runtime embedded in the APK. Compose is the UI; Kotlin is the host

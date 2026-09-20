@@ -1,0 +1,53 @@
+name: Android checks
+
+# Only Android/build changes consume an SDK/JDK runner. No emulator or AOSP.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontends/**'
+      - 'plugins/**'
+      - 'libraries/**'
+      - 'runtime/**'
+      - 'gradle/**'
+      - '*.gradle.kts'
+      - 'gradle.properties'
+      - 'gradlew*'
+      - '.github/workflows/android.yml'
+      - '!**/*.md'
+  pull_request:
+    paths:
+      - 'frontends/**'
+      - 'plugins/**'
+      - 'libraries/**'
+      - 'runtime/**'
+      - 'gradle/**'
+      - '*.gradle.kts'
+      - 'gradle.properties'
+      - 'gradlew*'
+      - '.github/workflows/android.yml'
+      - '!**/*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25' # matches gradle/gradle-daemon-jvm.properties
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager "platforms;android-37" "build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+      # The generated JS asset is tracked and verified by CI; no second npm install.
+      - run: ./gradlew --no-daemon :frontends:agenriod:testDebugUnitTest :frontends:agenriod:lintDebug :plugins:notes:assembleDebug

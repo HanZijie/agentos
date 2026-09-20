@@ -20,7 +20,7 @@ await esbuild.build({
   format: "iife",
   platform: "neutral",
   target: "es2020",
-  outfile: "app/src/main/assets/agenriod-agent.js",
+  outfile: "frontends/agenriod/src/main/assets/agenriod-agent.js",
   banner: { js: polyfill },
   logLevel: "warning",
 });

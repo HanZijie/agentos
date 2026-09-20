@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Layout and runtime contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check architecture and shell syntax
+        run: |
+          ./tools/ci/check-architecture.sh
+          bash -n tools/android/android.sh tools/ci/check-architecture.sh
+      - name: Inspect the changed files
+        id: changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == workflow_dispatch || -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]] || ! git cat-file -e "$BASE_SHA^{commit}"; then
+            echo 'runtime=true' >> "$GITHUB_OUTPUT"
+          else
+            git diff --check "$BASE_SHA" HEAD
+            changes="$(git diff --name-only --no-renames "$BASE_SHA" HEAD)"
+            if echo "$changes" | grep -Eq '^(runtime/|plugins/api/|tools/|frontends/agenriod/src/main/assets/|\.github/workflows/ci\.yml$)'; then
+              echo 'runtime=true' >> "$GITHUB_OUTPUT"
+            fi
+          fi
+      - uses: actions/setup-node@v4
+        if: steps.changes.outputs.runtime == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: runtime/package-lock.json
+      - name: Build and verify the runtime
+        if: steps.changes.outputs.runtime == 'true'
+        run: |
+          npm ci --prefix runtime --no-audit --no-fund
+          node runtime/build.mjs
+          node runtime/plugin-contract-test.mjs
+          node runtime/runtime-plugin-test.mjs
+          node tools/android/anthropic-env-test.mjs
+          git diff --exit-code -- frontends/agenriod/src/main/assets/agenriod-agent.js

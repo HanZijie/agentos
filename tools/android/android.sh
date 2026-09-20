@@ -2,14 +2,14 @@
 # Project-local Android tools; no changes to the user's shell profile are needed.
 set -euo pipefail
 
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$PROJECT_ROOT"
 
 fail() { printf '%s\n' "$*" >&2; exit 1; }
 
 usage() {
     cat <<'HELP'
-Usage: ./scripts/android.sh <command> [arguments]
+Usage: ./tools/android/android.sh <command> [arguments]
   doctor               Show SDK, Java, AVDs and connected devices
   start                Start or reuse the selected AVD; wait for Android to boot
   build                Build the debug APK
@@ -97,16 +97,16 @@ cleanup_model_config() {
 }
 
 stage_model_config() {
-    MODEL_CONFIG_FILE="$(node "$PROJECT_ROOT/scripts/anthropic-env.mjs" stage "$ADB" "$SERIAL" "$MODEL_ENV_FILE")"
+    MODEL_CONFIG_FILE="$(node "$PROJECT_ROOT/tools/android/anthropic-env.mjs" stage "$ADB" "$SERIAL" "$MODEL_ENV_FILE")"
 }
 
 import_installed_model_config() {
-    if [[ "$(node "$PROJECT_ROOT/scripts/anthropic-env.mjs" check "$MODEL_ENV_FILE")" != configured ]]; then
+    if [[ "$(node "$PROJECT_ROOT/tools/android/anthropic-env.mjs" check "$MODEL_ENV_FILE")" != configured ]]; then
         printf 'Local Anthropic settings skipped (empty key or missing file).\n'
         return
     fi
-    gradle :app:assembleDebugAndroidTest "$@"
-    "$ADB" -s "$SERIAL" install -r "$PROJECT_ROOT/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
+    gradle :frontends:agenriod:assembleDebugAndroidTest "$@"
+    "$ADB" -s "$SERIAL" install -r "$PROJECT_ROOT/frontends/agenriod/build/outputs/apk/androidTest/debug/agenriod-debug-androidTest.apk"
     "$ADB" -s "$SERIAL" shell am force-stop "$APP_ID"
     trap cleanup_model_config EXIT
     stage_model_config
@@ -140,7 +140,7 @@ find_device() {
 require_device() {
     "$ADB" start-server
     [[ -n "$SERIAL" ]] || find_device
-    [[ -n "$SERIAL" ]] || fail "No online $AVD_NAME found. Run ./scripts/android.sh start first."
+    [[ -n "$SERIAL" ]] || fail "No online $AVD_NAME found. Run ./tools/android/android.sh start first."
     [[ "$("$ADB" -s "$SERIAL" get-state)" == device ]] || fail "Device $SERIAL is not ready."
 }
 
@@ -183,26 +183,26 @@ case "$COMMAND" in
         "$ADB" devices -l
         ;;
     start) start_device ;;
-    build) build_agent; gradle :app:assembleDebug "$@" ;;
+    build) build_agent; gradle :frontends:agenriod:assembleDebug "$@" ;;
     run)
         start_device
         build_agent
-        gradle :app:assembleDebug "$@"
-        "$ADB" -s "$SERIAL" install -r "$PROJECT_ROOT/app/build/outputs/apk/debug/app-debug.apk"
+        gradle :frontends:agenriod:assembleDebug "$@"
+        "$ADB" -s "$SERIAL" install -r "$PROJECT_ROOT/frontends/agenriod/build/outputs/apk/debug/agenriod-debug.apk"
         import_installed_model_config "$@"
         "$ADB" -s "$SERIAL" shell am start -W -S -n "$ACTIVITY"
         ;;
     configure-model)
         require_device
-        "$ADB" -s "$SERIAL" shell run-as "$APP_ID" true >/dev/null 2>&1 || fail 'Install the debug app first with ./scripts/android.sh run.'
+        "$ADB" -s "$SERIAL" shell run-as "$APP_ID" true >/dev/null 2>&1 || fail 'Install the debug app first with ./tools/android/android.sh run.'
         import_installed_model_config "$@"
         "$ADB" -s "$SERIAL" shell am start -W -S -n "$ACTIVITY"
         ;;
     instrumentation)
         start_device
         build_agent
-        gradle :notes-plugin:assembleDebug :app:assembleDebugAndroidTest "$@"
-        "$ADB" -s "$SERIAL" install -r "$PROJECT_ROOT/notes-plugin/build/outputs/apk/debug/notes-plugin-debug.apk"
+        gradle :plugins:notes:assembleDebug :frontends:agenriod:assembleDebugAndroidTest "$@"
+        "$ADB" -s "$SERIAL" install -r "$PROJECT_ROOT/plugins/notes/build/outputs/apk/debug/notes-debug.apk"
         mkdir -p "$OUTPUT_DIR"
         FIXTURE_LOG="$OUTPUT_DIR/mcp-sdk-fixture.log"
         FIXTURE_PID=''
@@ -229,7 +229,7 @@ case "$COMMAND" in
         done
         [[ -n "$fixture_port" ]] || fail "MCP SDK fixture did not start; inspect $FIXTURE_LOG"
         "$ADB" -s "$SERIAL" reverse "tcp:$fixture_port" "tcp:$fixture_port" >/dev/null
-        if gradle :app:connectedDebugAndroidTest "-Pandroid.testInstrumentationRunnerArguments.port=$fixture_port" "${model_args[@]}" "$@"; then
+        if gradle :frontends:agenriod:connectedDebugAndroidTest "-Pandroid.testInstrumentationRunnerArguments.port=$fixture_port" "${model_args[@]}" "$@"; then
             status=0
         else
             status=$?
@@ -237,9 +237,9 @@ case "$COMMAND" in
         # connected tests may uninstall the target app. Restore the local
         # Anthropic settings afterwards so Android Studio's normal Run action
         # sees the encrypted configuration on the next install.
-        if [[ "$(node "$PROJECT_ROOT/scripts/anthropic-env.mjs" check "$MODEL_ENV_FILE")" == configured ]]; then
+        if [[ "$(node "$PROJECT_ROOT/tools/android/anthropic-env.mjs" check "$MODEL_ENV_FILE")" == configured ]]; then
             cleanup_model_config
-            "$ADB" -s "$SERIAL" install -r "$PROJECT_ROOT/app/build/outputs/apk/debug/app-debug.apk" >/dev/null 2>&1 || true
+            "$ADB" -s "$SERIAL" install -r "$PROJECT_ROOT/frontends/agenriod/build/outputs/apk/debug/agenriod-debug.apk" >/dev/null 2>&1 || true
             import_installed_model_config >/dev/null 2>&1 || true
             "$ADB" -s "$SERIAL" shell am start -W -S -n "$ACTIVITY" >/dev/null 2>&1 || true
         fi

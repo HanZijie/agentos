@@ -19,3 +19,7 @@ local.properties
 /.kotlin/
 /.env.anthropic.local
 /.idea/
+
+# AOSP is an external checkout; keep only its repository note here.
+/platform/checkout/*
+!/platform/checkout/README.md

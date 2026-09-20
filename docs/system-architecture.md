@@ -1,0 +1,120 @@
+# AgentOS 系统架构
+
+## 目标
+
+Agent 是由 Android 系统启动和监管的独立系统组件。Agent 的进程、任务、Session、事件日志和 Plugin 会话不属于任何前端 App。App 通过系统接口使用 Agent，前端关闭或替换不会改变 Agent 的事实状态。
+
+## 进程分层
+
+```text
+init
+└── sideagentd
+    ├── Agent runtime
+    ├── Task / session store
+    ├── Model gateway
+    ├── Capability broker
+    ├── Plugin session broker
+    └── Output event log
+
+system_server
+└── AgentManagerService
+    ├── sideagentd 生命周期和健康状态
+    ├── UserManager 生命周期
+    ├── 前端访问控制
+    ├── Plugin 身份校验
+    └── 系统 Binder API
+
+System UI / App
+└── Agent frontend client
+    ├── 创建或连接 Session
+    ├── 提交输入
+    ├── 订阅事件流
+    └── 渲染输出
+```
+
+`system_server` 不运行 QuickJS、模型请求、第三方 Plugin 或任意 shell。`sideagentd` 使用专用 Linux UID 和 SELinux domain；它不是 root，也不是 system UID。系统通过 init 负责进程重启，通过 AgentManagerService 负责 Binder 重连和状态恢复。
+
+## 系统接口
+
+系统接口分为三条 seam。跨前端的逻辑请求、响应和事件语义定义在 [Agent Bus v1](../system/agent/contracts/agent-bus-v1.md)；Android AIDL 和本地 reference transport 都应实现这套语义。
+
+系统接口分为三条 seam：
+
+1. **控制 seam**：前端向 `AgentManagerService` 提交输入、取消任务和管理 Session。
+2. **运行时 seam**：`AgentManagerService` 与 `sideagentd` 之间交换任务、健康状态和恢复命令。
+3. **能力 seam**：`sideagentd` 通过受控 Binder capability 调用系统能力和 App Plugin。
+
+第一版接口需要包含：
+
+- `createSession(userId, frontendId, options)`
+- `submitInput(sessionId, requestId, input)`
+- `cancelTask(requestId)`
+- `subscribeOutput(sessionId, afterSequence, sink)`
+- `getSnapshot(sessionId)`
+- `getHealth()`
+- `registerPlugin(descriptor, endpoint)`
+- `unregisterPlugin(pluginSessionId)`
+
+接口必须版本化。请求需要 request ID；事件需要 sequence；长操作需要取消和超时；断线需要从 sequence 恢复。第一版跨 App 输出使用系统 Binder 传递一个只读 `ParcelFileDescriptor` 管道，管道中的事件使用长度前缀的 UTF-8 JSON frame；管道断开后，前端以 `afterSequence` 重新订阅。慢读端不能阻塞 Agent，服务端应限制每个订阅者的缓冲并在超限时断开，前端再通过 snapshot + cursor 恢复。系统 Binder 只传递结构化控制数据和受限事件句柄，不能使用没有版本约束的 `command(name, payload)` 作为长期系统接口。
+
+## 输出事件
+
+Agent 以事件流作为唯一输出事实来源。事件写入事件日志后再向订阅者发送，事件顺序由每个 Session 的单调递增 sequence 保证。
+
+```json
+{
+  "protocolVersion": 1,
+  "sessionId": "session-1",
+  "taskId": "task-1",
+  "sequence": 42,
+  "eventType": "message.delta",
+  "timestamp": 1710000000000,
+  "payload": {"text": "..."}
+}
+```
+
+前端只保存自己的渲染缓存。重连时先读取 snapshot，再从 `afterSequence` 继续消费事件。多个前端可以订阅同一 Session，但每个前端的访问范围由 user、frontend identity 和系统授权决定。
+
+## 持久化
+
+`sideagentd` 需要维护可恢复的任务和事件存储。实现可以从 SQLite WAL 开始，抽象出后续可替换的 Store interface。
+
+核心记录包括：
+
+- `tasks`：用户输入、状态、重试策略和当前 checkpoint；
+- `task_attempts`：每次执行的开始、结束和错误；
+- `tool_operations`：外部副作用、幂等键和未知状态；
+- `events`：可按 Session 和 sequence 读取的输出事件；
+- `sessions`：用户、标题、上下文和最后序号；
+- `plugin_sessions`：Plugin 身份、能力租约和 Binder 死亡状态。
+
+进程重启不代表自动重做所有操作。读操作可以按策略重试；外部写操作必须依赖幂等键、操作记录和明确的未知状态处理。
+
+## Plugin 安全
+
+Plugin 运行在提供它的 App UID 中。系统从 PackageManager 和 Binder calling UID 获得身份，再校验签名、版本、声明的能力和 Android 权限。Plugin 的 JSON 描述只提供候选能力，不能作为身份凭据。
+
+`sideagentd` 不执行第三方 App 提供的任意 shell 命令。开发期的本地 shell manifest 只作为兼容适配器保留，系统部署时使用经过批准的 Binder capability 或 MCP endpoint。
+
+## 用户与数据
+
+系统服务必须显式处理多用户：
+
+- 每个 User 有独立的 Session、任务和 Plugin 注册状态；
+- 用户停止时撤销前端订阅和 Plugin capability；
+- 用户解锁前只加载 Direct Boot 所需的最小恢复状态；
+- API key 和 OAuth credential 由 Keystore2 管理，不进入 system_server 日志或公共事件；
+- 数据目录使用专用 SELinux label，不能让 sideagentd 直接读取其他用户的 app-private 目录。
+
+## 诊断
+
+第一版系统集成必须提供：
+
+```text
+dumpsys agent
+adb shell cmd agent health
+adb shell cmd agent sessions --user <id>
+adb shell cmd agent tasks --user <id>
+```
+
+诊断输出只显示状态、计数、sequence、错误类别和耗时，不输出 API key、完整提示词或敏感 Plugin 参数。

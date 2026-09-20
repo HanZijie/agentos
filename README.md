@@ -1,264 +1,110 @@
-# Agenriod
+# AgentOS
 
-Agenriod 是一个在 Android 设备本地运行的 Agent 前端。它使用 Jetpack Compose 提供界面，把 Android 文件、进程、网络和系统输入能力通过 Kotlin bridge 暴露给 QuickJS 中的 Pi Agent。
+AgentOS 将 Agent 作为 Android 系统组件运行。Agent 由系统启动和监管，拥有自己的进程、持久化状态、权限边界和输出事件流；Android App 只是前端，可以创建 Session、提交输入和订阅输出。
 
-当前实现基于上游 `@earendil-works/pi-agent-core` 的 Agent 循环。上游项目把 Agent runtime 和工具执行分成了可组合的层；Agenriod 保留 Agent 循环、工具调用、消息和生命周期事件的契约，再用 Android 能力替换 Node.js 的文件系统和进程实现。
+当前仓库处于系统化迁移阶段。`frontends/agenriod` 仍包含可运行的 Android 原型和嵌入式 Agent Host，用来保持已有行为和测试；新的系统宿主放在 `system/agent` 和 `platform`，后续会逐步把 Runtime、任务存储和 Plugin Broker 从原型 App 迁入 `sideagentd`。
 
-## 架构总览
-
-```mermaid
-flowchart TD
-    UI[Jetpack Compose UI\n聊天 / 设置 / Session]
-    VM[AgenriodViewModel]
-    C[AgenriodController\n状态与编排]
-    R[PiRuntime\nQuickJS 生命周期与并发]
-    JS[agenriod-agent.js\n上游 pi-agent-core Agent]
-    B[NativeAgentBridge\nKotlin capability bridge]
-    F[Workspace tools\nread write edit grep find ls bash]
-    N[Provider HTTP\nOpenAI-compatible / Anthropic / Gemini]
-    E[Extensions\nPlugins / Bash Hooks]
-    S[Private app storage\nSessionStore / AgentStore / SKILL.md]
-
-    UI <--> VM
-    VM --> C
-    C --> R
-    R <--> JS
-    JS <--> B
-    B --> F
-    B --> N
-    B --> E
-    B --> S
-```
-
-一次消息的主要路径是：
-
-1. `MainActivity` 把输入框中的 `TextFieldValue` 和操作事件交给 `AgenriodController`。
-2. Controller 校验当前 Session 和输入法组合态，必要时展开 `/skill` 或 `@plugin` 快捷命令。
-3. `PiRuntime` 在后台 dispatcher 中串行访问 QuickJS，并调用 `__agenriod_prompt`。
-4. JS 中的 `Agent` 按 Pi 的循环执行模型请求和工具调用。每一个生命周期事件都带有 `sessionId` 返回 Kotlin。
-5. `NativeAgentBridge` 执行文件、shell、Plugin 或 Hook 操作；模型请求也由 bridge 转成供应商 HTTP 请求。
-6. Controller 把事件归约成 UI 消息，同时保存原始 Pi transcript 和可读的显示消息。
-
-## 目录和职责
+## 目标架构
 
 ```text
-app/src/main/java/com/example/agenriod/
-├── MainActivity.kt                  # Compose 入口和页面路由
-├── agent/
-│   ├── AgentModels.kt               # UI、模型、Plugin、Skill、Session 数据模型
-│   ├── AgenriodViewModel.kt         # Activity 重建时保留 Controller
-│   ├── AgenriodController.kt        # 单向状态、Session、快捷命令和事件归约
-│   ├── PiRuntime.kt                  # QuickJS 实例、JS asset 加载、请求串行化
-│   ├── NativeAgentBridge.kt          # Android 文件/进程/HTTP/扩展能力
-│   ├── AgentStore.kt                 # 模型设置和 Keystore 加密 API key
-│   ├── SessionStore.kt               # 本地 Session 文件读写
-│   └── SkillCatalog.kt               # SKILL.md 发现和解析
-└── ui/
-    ├── CompactComposer.kt            # 单行输入栏、中文 IME、语音/图片入口
-    ├── ComposerShortcuts.kt          # 按光标位置计算 @ 和 / 补全
-    └── theme/                        # Agenriod 颜色、字体和主题
+Android init
+└── sideagentd                         # 独立系统进程，Agent 数据面
+    ├── Agent Runtime / QuickJS
+    ├── Task Store / Session Store
+    ├── Model Gateway
+    ├── Capability Broker
+    ├── Plugin Sessions
+    └── Output Event Bus
 
-app/src/main/assets/
-├── agenriod-agent.js                # 构建生成的 Pi runtime bundle
-└── skills/*/SKILL.md                # 内置 Skill prompt
+system_server
+└── AgentManagerService                  # 系统控制面
+    ├── 管理 sideagentd 生命周期
+    ├── 管理用户、权限和前端连接
+    ├── 校验 Plugin 身份
+    └── 暴露稳定 AIDL
 
-runtime/
-├── src/agent-runtime.js              # JS 侧 Agent、工具 schema 和 provider bridge
-├── build.mjs                         # esbuild bundle 脚本和 QuickJS polyfill
-├── package.json
-└── package-lock.json
+System UI / Voice / 任意 App
+└── Agent Frontend Client                 # 输入、订阅、渲染
+
+第三方 App
+└── AgentPluginService                    # Plugin 在自己的 UID 中执行
 ```
 
-## Android UI 层
+`system_server` 只负责系统契约、权限和路由，不执行模型循环、QuickJS、网络请求或第三方 Plugin 代码。`sideagentd` 使用专用 UID 和 SELinux domain，由 `init` 启动；它崩溃时由系统重启，状态从任务存储和事件日志恢复。
 
-`MainActivity` 只负责组装 Compose 页面和 Activity 级资源。实际状态由 `AgenriodViewModel` 持有 Controller，因此旋转屏幕或 Activity 重建不会创建新的 Agent 会话。
+## 输出管道
 
-聊天页包含：
-
-- `CompactComposer`：单行 `BasicTextField`，保留中文拼音的 composing range；输入法提示语言为 `zh-CN,en-US`。
-- `@` Plugin 和 `/` Skill 补全：补全只替换光标所在的当前词，不会覆盖前后文本。
-- 内联 `SpeechRecognizer` 麦克风按钮；语音结果默认按普通话识别。
-- 图片选择入口；图片以 base64 image content block 交给模型。
-- 可展开的工具执行卡片和可选择文本的 Agent 回复。
-
-设置页分为 Model、Plugins、Hooks 三个页面。Session 页负责新建、切换、重命名和删除会话。
-
-## Pi runtime 层
-
-`runtime/src/agent-runtime.js` 使用上游 `Agent` 和 `AssistantMessageEventStream`。它不直接访问 Android 或 Node API，只调用两个 host binding：
+Agent 的事实来源是系统侧 Session 和事件日志，不是某个 Activity 的内存状态。前端通过 AgentManagerService 订阅事件：
 
 ```text
-__agenriod_call(method, payload)
-__agenriod_call_async(method, payload)
+createSession(userId, frontendId)
+submitInput(sessionId, requestId, input)
+subscribeOutput(sessionId, afterSequence)
+cancelTask(requestId)
+getSnapshot(sessionId)
 ```
 
-JS 侧创建 Pi 风格的 `read`、`write`、`edit`、`grep`、`find`、`ls`、`bash` 工具。工具参数使用 TypeBox schema，执行结果使用 Pi 的 text/image content 结构。
+输出事件至少包含 `sessionId`、`taskId`、`requestId`、`sequence`、`eventType`、`payload` 和 `timestamp`。跨 App 的第一版管道使用系统 Binder 返回的只读 `ParcelFileDescriptor`，事件以长度前缀的 UTF-8 JSON frame 传递；前端断线后按序号恢复，不需要重新创建 Agent。慢读端只会丢失当前订阅，不能阻塞 Agent；前端通过 snapshot + sequence 补齐事件。
 
-QuickJS 没有浏览器标准库，因此 `build.mjs` 在 bundle 前添加了 `TextEncoder`、`TextDecoder`、`URL`、`AbortController`、`structuredClone` 等最小兼容实现。网络和文件 I/O 仍然全部在 Kotlin 完成。
-
-## Kotlin capability bridge
-
-`NativeAgentBridge` 是 JS runtime 和 Android 的唯一能力边界。它通过 method name 分派调用：
-
-| 方法 | 作用 |
-| --- | --- |
-| `read` | 读取 UTF-8 文本或常见图片类型，支持 offset/limit |
-| `write` | 创建父目录并写入文件 |
-| `edit` | 替换恰好一次出现的文本 |
-| `grep` | regex/literal、大小写、glob、上下文行和匹配上限 |
-| `find` / `ls` | 枚举 workspace 文件 |
-| `bash` | 在 workspace 使用 `/system/bin/sh` 执行命令，并限制超时和输出 |
-| `complete` | 将统一的模型上下文转成供应商 HTTP 请求 |
-| `plugin` | 执行 Plugin manifest 中声明的命令 |
-| `hook` | 在工具前后运行配置的 Hook 命令 |
-| `event` | 把 Pi 生命周期事件送回 Controller |
-| `plugins` | 读取已安装 Plugin manifest |
-
-文件路径先经过 `normalize` 和 workspace 前缀检查，不能访问 app-private workspace 以外的路径。workspace 位于：
+## 目录
 
 ```text
-<app files>/workspace
+frontends/agenriod/       当前 Compose 前端和迁移中的兼容实现
+system/agent/             sideagentd、Agent Bus、启动和运行时设计
+platform/framework/       system_server 的 AgentManagerService 设计
+platform/product/         系统签名、产品包和权限配置占位
+platform/aosp-integration AOSP 产品接入、init、SELinux 和构建说明
+platform/checkout/        AOSP repo checkout 占位目录，不纳入本仓库
+plugins/api/              Plugin AIDL 与协议契约
+plugins/notes/            跨 App Notes Plugin 示例
+plugins/catalog/          Plugin 开发约定和示例清单
+libraries/file-broker/    Android 文件能力适配器
+libraries/mcp-client/     Streamable HTTP MCP 客户端
+runtime/                  Agent JS 参考实现和 Node 契约测试
+tools/android/            本地 Android 构建、设备测试和调试脚本
+docs/                     架构、迁移和开发文档
 ```
 
-## 模型请求
+## 当前实现与目标的关系
 
-设置页中的 `provider`、`baseUrl`、`model`、`apiKey` 和 `systemPrompt` 由 `ModelConfig` 表示。
+当前 Android 原型中的 `AgentHost`、`PiRuntime`、Session 事件归约、MCP 协议和 Plugin Binder 契约会被保留为迁移素材。`AgentService`、app-private 任务队列、Activity 内的 UI 状态和本地 shell Plugin 不是最终系统架构。
 
-- `openai-compatible`：发送到 `POST /chat/completions`，兼容 OpenAI、OpenRouter 和本地 BYOK gateway。
-- `anthropic`：发送到 `POST /messages`，使用 Anthropic headers 和 content block 格式。
-- `gemini`：发送到 Gemini `:generateContent`，使用 API key query、`inlineData` 图片和 function calling。
+系统迁移需要把这些职责移到 `sideagentd`：
 
-当前 provider adapter 请求一次返回完整响应，然后在 JS 中转换成 Pi 的 `AssistantMessageEventStream` 事件。因此 Agent 的工具递归和生命周期事件保持可用，但网络层还不是逐 token streaming。
+- 任务和 Session 使用 SQLite/WAL 或等价的事件日志，支持崩溃恢复、序列号和幂等键；
+- Runtime 通过 Capability Broker 访问文件、网络、系统能力和 Plugin；
+- Plugin 由 PackageManager、UID、签名和系统权限共同校验；
+- App 只持有前端订阅和临时显示状态；
+- 高风险工具在系统策略和用户授权下执行，Agent 输出不能直接改变系统权限。
 
-API key 只保存在 app-private preferences 中的 Keystore 加密字段。请求只发往用户配置的 endpoint；代码不会把 key 写入 Session transcript、Hook 环境变量或 Plugin 参数。
-
-本地 Anthropic 测试可以填写 `.env.anthropic.local`（模板见 [.env.anthropic.example](.env.anthropic.example)），然后运行 `./scripts/android.sh run` 或 `./scripts/android.sh instrumentation`。导入使用 Android Keystore；空 Key 会跳过导入，现有配置保持不变。
-
-## MCP
-
-In Settings → Plugins, use **Add Streamable HTTP MCP** to create a local MCP entry. Provide a server ID, an HTTPS or loopback HTTP URL, and optional headers as JSON. Agenriod discovers `tools/list`, exposes the tools to the Agent, and describes the configured transport and address in the System Prompt while omitting authentication headers.
-
-## Plugin
-
-Plugin 是 app-private `plugins` 目录中的 JSON manifest。设置页可以安装示例或粘贴 manifest，也可以删除已安装 Plugin。
-
-```json
-{
-  "id": "workspace-info",
-  "name": "Workspace Info",
-  "description": "Inspect files in the current workspace",
-  "tools": [
-    {
-      "name": "list",
-      "description": "List workspace files",
-      "parameters": {"type": "object", "properties": {}},
-      "command": "ls -la"
-    }
-  ]
-}
-```
-
-加载后，工具名会变为 `plugin_<plugin-id>_<tool-name>`，并加入下一次 Agent runtime 配置。命令在 workspace 中执行，可读取：
-
-```text
-PLUGIN_ARGS_JSON   # 当前工具参数 JSON
-AGENT_WORKSPACE    # workspace 的绝对路径
-```
-
-在聊天中输入 `@` 会从已加载的 manifest 生成候选，选中后插入稳定的 Plugin id；Controller 会在发给 Agent 的请求中说明要使用该 Plugin。
-
-## Hooks
-
-Hooks 在设置页中每行一个，格式为：
-
-```text
-before_tool|command
-after_tool|command
-```
-
-Hook 命令可读取：
-
-```text
-AGENT_EVENT
-AGENT_TOOL
-AGENT_ARGS_JSON
-```
-
-`before_tool` 返回非零状态会阻止工具调用；`after_tool` 只记录观察结果。Android 没有系统 GNU Bash，当前实现使用 `/system/bin/sh`，因此支持常用 shell 命令，但不是随 APK 分发的完整 Bash。
-
-## Skill
-
-`SkillCatalog` 首先加载 APK 内置的 `assets/skills/*/SKILL.md`，再加载 app-private 目录中的定义：
-
-```text
-<app files>/skills/*/SKILL.md
-<app files>/workspace/.pi/skills/*/SKILL.md
-```
-
-同名本地 Skill 会覆盖内置 Skill。`/` 补全展示 Skill 的 `name` 和 `description`，发送时把其正文作为 Agent instruction，并保留用户的实际任务。
-
-## Session 和持久化
-
-每个 Session 对应 `files/sessions/<session-id>.json`，包括：
-
-- `uiMessages`：聊天页需要显示的消息和工具状态。
-- `rawMessages`：可再次传给 Pi Agent 的原始 user/assistant/toolResult transcript。
-- `title` 和 `updatedAt`：Session 列表的显示信息。
-
-切换 Session 时，Controller 会先中断当前 runtime，再使用目标 Session 的 `rawMessages` 创建新的 Pi Agent。每个 JS 事件带有 session id，旧 runtime 的延迟事件会被忽略。
-
-## 构建流程
-
-```text
-npm ci --prefix runtime
-        │
-        ▼
-node runtime/build.mjs
-        │
-        ▼
-app/src/main/assets/agenriod-agent.js
-        │
-        ▼
-./scripts/android.sh build / run
-```
-
-`scripts/android.sh build` 和 `run` 会自动执行 runtime bundle。Android 脚本还负责定位 SDK、选择 `Pixel_8a`、构建、安装和启动应用。
-
-常用命令：
+## 开发命令
 
 ```bash
-./scripts/android.sh doctor
-./scripts/android.sh build
-./scripts/android.sh run
-./scripts/android.sh logs -d
-./scripts/android.sh crashes
-./scripts/android.sh screenshot
-./scripts/android.sh ui
-./scripts/android.sh gradle :app:testDebugUnitTest
-./scripts/android.sh gradle :app:lintDebug
-./scripts/android.sh instrumentation
+./tools/android/android.sh doctor
+./tools/android/android.sh build
+./tools/android/android.sh run
+./tools/android/android.sh gradle :frontends:agenriod:testDebugUnitTest
+./tools/android/android.sh gradle :frontends:agenriod:lintDebug
+./tools/android/android.sh instrumentation
+
+npm ci --prefix runtime
+node runtime/build.mjs
+node runtime/plugin-contract-test.mjs
+node runtime/runtime-plugin-test.mjs
 ```
 
-## 测试边界
+Android 原型的设备测试仍使用本地 `Pixel_8a` AVD。系统组件的编译和 Cuttlefish 验证会在 `platform/checkout` 可用后加入 CI 矩阵。
 
-已有测试覆盖：
+## 迁移阶段
 
-- `ComposerShortcutsTest`：按光标位置替换 Plugin/Skill 快捷词。
-- `CompactComposerTest`：中文 composing range、中文提交、单行高度和按钮宽度。
-- `SessionStoreTest`：Session 隔离、Pi transcript 恢复和挂起模型请求中断。
-- `ExampleInstrumentedTest`：Android Keystore API key 回环。
-- `ExampleUnitTest`：基础 JVM 单元测试。
-- `NotesPluginCrossAppTest`：Plugin 进程存活门控、Host 重启重注册和 Notes MCP 工具。
-- `McpHttpSessionTest` / `McpSdkInteropTest`：Streamable HTTP JSON/SSE、Session 过期、取消与官方 TypeScript SDK 互操作。
+1. 冻结现有 App 原型，并定义稳定 AIDL、事件流和任务状态协议。
+2. 创建最小 `sideagentd`，通过 `init` 启动并注册 Binder 服务。
+3. 加入专用 UID、SELinux domain、数据目录和 `dumpsys agent` 诊断入口。
+4. 在 `system_server` 实现 AgentManagerService，连接并恢复 sideagentd。
+5. 将 System UI 和现有 Agenriod App 改成 Agent 前端。
+6. 迁移 Task Store、Session Store、Pi Runtime 和 Plugin Broker。
+7. 移除 App 内 Agent 宿主，只保留前端和兼容测试。
 
-这些测试验证本地 Agent、输入和存储边界。它们不会用真实 API key 发起模型请求；真实 provider 的可用性仍取决于 endpoint、model id、账号权限和设备网络。
+每个阶段都必须能独立启动、检查和回滚。系统接口的设计文档见 [system-architecture.md](docs/system-architecture.md)，前端和系统之间的逻辑协议见 [agent-bus-v1.md](system/agent/contracts/agent-bus-v1.md)，迁移清单见 [migration-roadmap.md](docs/migration-roadmap.md)。
 
-## 已知边界和后续方向
-
-以下是当前实现的事实，不是已经完成的功能：
-
-1. 网络响应目前是整段返回后再转成 Pi stream，没有逐 token provider streaming。
-2. Shell 执行器是 Android `/system/bin/sh`，还没有内置完整 GNU Bash。
-3. workspace 默认是 app-private 目录，还没有通过 Storage Access Framework 选择外部代码仓库。
-4. Plugin 当前是受控 JSON manifest + shell command 扩展点，还没有加载任意 TypeScript 插件包。
-5. 语音输入依赖系统 SpeechRecognizer 和用户设备上的中文输入法/语音服务。
+默认 CI 只运行离线目录检查、Node 契约测试和按变更触发的 Android JVM/Lint 检查；它不会同步 AOSP、启动模拟器或构建系统镜像。平台镜像验证保留为后续手动 workflow。

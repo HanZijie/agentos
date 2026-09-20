@@ -1,62 +1,55 @@
-# Plugin process lifecycle and MCP
+# Plugin 生命周期和 MCP
 
-## Activation contract
+## 系统 Plugin 会话
 
-A separately installed Android Plugin is active only while its owner package has a live process that has registered an `AgentPluginService` endpoint.
+Plugin 代码始终运行在提供它的 App UID 和进程中。Agent 系统侧只保存能力摘要和运行时会话，不把第三方代码加载到 `sideagentd` 地址空间。
 
-- The Plugin calls `PluginProcessRegistration` from `Application.onCreate`.
-- The Host's `PluginHostService` is a registration broker in `:agent`; its package query reads only manifest metadata and never starts a Plugin process.
-- The registration is held by a Binder endpoint. Binder death removes the Plugin immediately from the Host catalog.
-- Moving the Plugin Activity to the background keeps the process registration alive. Force-stop, process death, or an explicit close removes the Plugin tools.
-- A Host restart does not require the Plugin UI to be reopened: the existing registration binding reconnects and registers again. The Plugin's own process remains the authority for its lifetime.
-- A tool call already in flight is allowed to settle. New calls after registration death fail with an inactive-plugin error and are never replayed.
+```text
+PackageManager
+    ↓ 包名、UID、签名和版本校验
+AgentManagerService
+    ↓ capability session
+sideagentd
+    ↓ Binder / MCP call
+App AgentPluginService
+```
 
-This is process liveness, not foreground visibility. Android may still kill a background process under memory pressure; the Binder death path then withdraws its tools.
+Plugin 进程死亡时，系统撤销该 capability session；已经发出的调用允许返回，但不会在新的会话中自动重放。Plugin 重启后需要重新握手，重新获得新的 session id 和能力租约。
 
-## Descriptor version 2
-
-Version 1 native tools remain supported. Version 2 may add `mcpServers` without putting credentials into the public catalog:
+静态 manifest 只用于发现和能力摘要，不是身份凭据：
 
 ```json
 {
   "protocolVersion": 2,
-  "id": "notes",
-  "name": "Notes",
-  "tools": [{ "name": "notes.search", "inputSchema": { "type": "object" } }],
+  "pluginId": "com.example.notes",
+  "version": "1.0.0",
+  "service": "com.example.notes/.AgentPluginService",
+  "capabilities": ["notes.search", "notes.update"],
   "mcpServers": [{
     "id": "notes",
     "transport": "streamable-http",
-    "url": "https://example.test/mcp",
-    "headers": { "Authorization": "Bearer token-held-by-plugin" }
+    "url": "https://example.test/mcp"
   }]
 }
 ```
 
-External Plugin credentials stay in the Host's in-memory registration record. Agenriod-local manifests are stored in its app-private files directory. In both cases headers are omitted from the public catalog and System Prompt. Native and MCP tool names are kept in separate namespaces (`mcp.<server>.<tool>` internally); the bundled runtime gives every tool a bounded, deterministic model name.
+认证 headers 和用户 credential 留在系统或 Plugin 的私有存储中，不进入公共目录、事件流或 Agent prompt。
 
-## Agenriod-local MCP configuration
+## MCP
 
-The Agenriod Settings → Plugins page can create a local Plugin manifest with a server ID, Streamable HTTP URL, and optional JSON headers. These manifests are stored under the Agenriod app-private `files/plugins/` directory and are owned by the Agent Host process. Their MCP tools are available while the Host is running; headers are never included in the System Prompt. Use the Refresh button after a server changes its tool list.
+`libraries/mcp-client` 是当前 Streamable HTTP 适配器。它支持：
 
-## Streamable HTTP MCP
+- `initialize`、协议协商和 `notifications/initialized`；
+- `tools/list` 分页和 `tools/call`；
+- JSON 和 Server-Sent Events 响应；
+- `tools/list_changed`、`ping`、session id 和显式清理；
+- HTTPS 远端 endpoint 和 loopback HTTP 本地 endpoint；
+- 请求/响应上限、header 校验、超时和不自动重放 `tools/call`。
 
-`mcp-client` implements the initial Streamable HTTP client seam:
+系统迁移时，MCP client 应由 `sideagentd` 持有。前端只看到已经过 capability policy 过滤的工具摘要和事件。
 
-- `initialize`, negotiated protocol version, and `notifications/initialized`;
-- `tools/list` pagination and `tools/call`;
-- `application/json` and `text/event-stream` responses;
-- server `tools/list_changed` notifications and `ping` requests;
-- session IDs, explicit `DELETE` cleanup, and 404 session expiry;
-- HTTPS for remote endpoints and loopback HTTP for on-device/local servers;
-- bounded request/response sizes, header validation, timeouts, no redirect credential forwarding, and no automatic replay of `tools/call`.
+OAuth discovery、stdio transport、task-mode MCP 请求以及 server-to-client resource/prompt subscriptions 暂不属于第一版系统协议。
 
-OAuth discovery, stdio transport, task-mode MCP requests, and server-to-client resource/prompt subscriptions are outside this version. They can be added without changing the Android Plugin registration seam.
+## 迁移期兼容实现
 
-## Verification
-
-```bash
-./scripts/android.sh instrumentation
-node runtime/runtime-plugin-test.mjs
-```
-
-The device suite includes process-gated Plugin tools, Host restart re-registration, Notes MCP over loopback HTTP, and the official TypeScript SDK Streamable HTTP interoperability test.
+`frontends/agenriod` 中现有的 App-private manifest、PluginHostService 和 MCP 设置页继续用于原型测试。它们不是系统注册中心；迁移到 `AgentManagerService` 后，这些实现只保留为兼容适配器。
