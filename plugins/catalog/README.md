@@ -2,6 +2,8 @@
 
 Plugin 在自己的 App UID 和进程中运行。系统侧通过 PackageManager、Binder calling UID、签名、版本和能力声明建立 capability session。
 
+系统部署的发现与授权：Plugin package 在 manifest 声明受 `BIND_AGENT_PLUGIN`（系统专有）保护的 endpoint service 加 meta-data 摘要；Plugin 对每个 user 默认禁用，需在系统设置显式启用。权威能力声明来自握手时的运行时 descriptor，不来自 manifest。完整语义见 [Plugin Injection Contract v1](../../system/agent/contracts/plugin-injection-v1.md)。
+
 推荐结构：
 
 ```text

@@ -9,12 +9,6 @@ platform/product/                     产品包、权限和 system app 配置
 platform/checkout/                    AOSP checkout（本地、不提交）
 ```
 
-后续 AOSP 变更包括：
-
-- `PRODUCT_PACKAGES` 加入 sideagentd 和系统前端；
-- `init` service 与 `service_contexts`；
-- `system_server` 注册 AgentManagerService；
-- sideagentd 的 UID、file_contexts 和 SELinux domain；
-- 系统签名前端和 Plugin allowlist。
+所有 AOSP 侧改动（sideagentd 落地、SELinux、AgentManagerService、Plugin 权限、freezer 与 phantom process killer 调优、系统测试）以 [AOSP 变更全局 TODO](aosp-todo.md) 为唯一事实来源，按状态和验证证据维护。
 
 这些内容通过单独的手动平台 workflow 验证，不进入默认 PR CI。

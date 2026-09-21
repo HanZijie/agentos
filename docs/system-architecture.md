@@ -40,6 +40,8 @@ Agent 应作为系统服务和常驻进程存在，由系统负责启动、监�
 
 Plugin 应被理解为 App 运行时向 Agent 系统进程注入的运行时变量和受控 capability 声明。Plugin 代码留在提供它的 App UID 和进程内；`sideagentd` 接收经系统校验的描述、参数和调用结果，不加载第三方代码到 `system_server` 或 `sideagentd`。
 
+上述注入语义由 [Plugin Injection Contract v1](../system/agent/contracts/plugin-injection-v1.md) 冻结：manifest 锚点加 per-user 启用负责发现与授权；连接由系统按需 `BIND_AUTO_CREATE` 拉起或解冻，空闲时回收；能力声明在每次握手时运行时获取，不持久化为事实。capability 分 tool 和 resource 两类——tool 是受幂等键与取消语义约束的副作用调用；resource 是无副作用的瞬时读取，内容以 system reminder 注入当轮模型输入，不写入会话历史，保证事件日志 append-only 与模型输入历史前缀的缓存稳定性。
+
 这个模型的核心工程难点是 Session 调度。调度器需要在多个 User、前端、Session、Plugin capability 和 Agent worker 之间处理排队、优先级、公平性、并发上限、取消、超时、背压、断线、Plugin death 和 daemon 重启恢复。Session Store、Task Store、事件 sequence 和 capability lease 都应围绕这些调度语义设计。
 
 上述语义由 [Session Scheduling Contract v1](../system/agent/contracts/session-scheduling-v1.md) 冻结。该契约将 Session 的状态机与 Task 的一次执行分开，并规定同一 Session 串行、不同 Session 受全局和 User 并发上限约束；实现可以替换 Scheduler 和 Store，但不能改变回执、事件顺序、Snapshot 恢复或 lease 撤销语义。
@@ -62,8 +64,9 @@ Plugin 应被理解为 App 运行时向 Agent 系统进程注入的运行时变�
 - `subscribeOutput(sessionId, afterSequence, sink)`
 - `getSnapshot(sessionId)`
 - `getHealth()`
-- `registerPlugin(descriptor, endpoint)`
-- `unregisterPlugin(pluginSessionId)`
+- `setAgentPluginEnabled(pluginId, enabled)`（per-user）
+
+Plugin 的发现、按需绑定、握手（`openPluginSession`）、tool 调用与 resource 注入接口由 [Plugin Injection Contract v1](../system/agent/contracts/plugin-injection-v1.md) 单独冻结，不属于前端 API；前端只拿到经 capability policy 过滤的工具摘要，不直接持有 Plugin endpoint。
 
 接口必须版本化。请求需要 request ID；事件需要 sequence；长操作需要取消和超时；断线需要从 sequence 恢复。第一版跨 App 输出使用系统 Binder 传递一个只读 `ParcelFileDescriptor` 管道，管道中的事件使用长度前缀的 UTF-8 JSON frame；管道断开后，前端以 `afterSequence` 重新订阅。慢读端不能阻塞 Agent，服务端应限制每个订阅者的缓冲并在超限时断开，前端再通过 snapshot + cursor 恢复。系统 Binder 只传递结构化控制数据和受限事件句柄，不能使用没有版本约束的 `command(name, payload)` 作为长期系统接口。
 
@@ -105,6 +108,8 @@ Agent 以事件流作为唯一输出事实来源。事件写入事件日志后�
 Plugin 运行在提供它的 App UID 中。系统从 PackageManager 和 Binder calling UID 获得身份，再校验签名、版本、声明的能力和 Android 权限。Plugin 的 JSON 描述只提供候选能力，不能作为身份凭据。
 
 `sideagentd` 不执行第三方 App 提供的任意 shell 命令。开发期的本地 shell manifest 只作为兼容适配器保留，系统部署时使用经过批准的 Binder capability 或 MCP endpoint。
+
+授权分四层，各自独立：平台身份（PackageManager、UID、签名）、App opt-in（manifest service + `BIND_AGENT_PLUGIN` 权限）、用户启用（AgentManagerService per-user 状态，默认禁用）和会话 lease（调度契约第 8 节）。完整语义见 [Plugin Injection Contract v1](../system/agent/contracts/plugin-injection-v1.md)。
 
 ## 用户与数据
 

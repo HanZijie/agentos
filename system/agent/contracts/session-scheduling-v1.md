@@ -218,7 +218,7 @@ Snapshot 是某个 sequence 的一致视图，至少包含：
 
 ## 8. Plugin capability lease
 
-每次 Session 使用 Plugin 前，系统必须为该使用关系创建 lease。Lease 至少绑定：
+每次 Session 使用 Plugin 前，系统必须为该使用关系创建 lease。Plugin session 的发现、绑定、握手和调用契约见 [Plugin Injection Contract v1](plugin-injection-v1.md)；本节冻结 lease 的使用与撤销语义。Lease 至少绑定：
 
 ```text
 leaseId

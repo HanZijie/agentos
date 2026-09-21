@@ -406,7 +406,7 @@ capability.lease_revoked
 
 ## 7. v1 暂不包含
 
-- Plugin 注册协议；
+- Plugin 注册协议（已由 [Plugin Injection Contract v1](plugin-injection-v1.md) 单独冻结）；
 - 模型 Provider 配置协议；
 - 系统权限申请协议；
 - 多 Agent 协作协议；

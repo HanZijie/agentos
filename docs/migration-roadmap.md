@@ -9,6 +9,7 @@
 - [x] 把 Agent Bus 和输出事件协议固化成版本化协议文档。
 - [x] 定义任务状态、错误分类、取消和重连语义。
 - [x] 冻结 Session 状态、调度、公平性、并发、恢复和 Plugin capability lease 契约。
+- [x] 冻结 Plugin 运行时注入契约：manifest 发现、per-user 启用、按需绑定/解冻、握手、tool 调用、resource 的 system reminder 注入（[plugin-injection-v1](../system/agent/contracts/plugin-injection-v1.md)）。
 
 ## M1：sideagentd 骨架
 
@@ -41,12 +42,23 @@
 
 ## M5：Plugin Broker
 
+按 [plugin-injection-v1](../system/agent/contracts/plugin-injection-v1.md) 实现；AOSP 侧条目见 [AOSP 变更全局 TODO](../platform/aosp-integration/aosp-todo.md)。
+
+- [x] daemon 参考实现 `PluginBroker`：descriptor v3 校验、启用状态、按需绑定/握手、invoke 与 resource/reminder 管道、lease 接线；契约 §13 reference tests 1–12 通过。
+
 - [ ] 由 system_server 校验 Plugin UID、签名和版本。
+- [ ] manifest 发现、`BIND_AGENT_PLUGIN` 权限与 per-user 启用状态。
+- [ ] 按需 `BIND_AUTO_CREATE` 拉起/解冻与空闲 unbind；freezer 与 phantom process killer 验证及调优（平台验证项）。
+- [ ] `openPluginSession` 握手、descriptor v3 校验与 policy 过滤。
 - [ ] 将 Plugin capability 句柄传递给 sideagentd。
+- [ ] tool 调用管道：requestId 幂等、取消、deadline、幂等键与操作记录。
+- [ ] resource 读取与 system reminder 注入管道：turn boundary 拉取、预算与确定性截断、非重放诊断记录。
 - [ ] Plugin 进程死亡时撤销 capability。
-- [ ] 将本地 shell manifest 限定为开发模式。
+- [ ] 将本地 shell manifest 和推送注册限定为开发模式。
 
 ## M6：平台集成
+
+AOSP 侧改动以 [AOSP 变更全局 TODO](../platform/aosp-integration/aosp-todo.md) 为唯一事实来源。
 
 - [ ] 在 Cuttlefish userdebug 上编译和启动 sideagentd。
 - [ ] 运行系统级 Binder、SELinux 和多用户测试。
