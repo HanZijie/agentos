@@ -6,7 +6,8 @@
     "build": "node build.mjs",
     "test:plugin": "node plugin-contract-test.mjs",
     "test:acp": "node --test acp-adapter-test.mjs",
-    "start:acp": "node src/acp-adapter.js"
+    "start:acp": "node src/acp-adapter.js",
+    "test:scheduler": "node --test ../system/agent/daemon/test/*.test.mjs ../runtime/pi-worker-test.mjs"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^1.4.0",

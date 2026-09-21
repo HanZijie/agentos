@@ -5,6 +5,13 @@
 does not replace `sideagentd` and does not own Android transport, identity,
 event storage, idempotency, or recovery.
 
+The Scheduler uses the same adapter as a Worker through
+`runtime/src/pi-worker.js`. In that mode the adapter is driven by one
+Scheduler assignment at a time; the Scheduler owns the AgentOS `taskId`,
+idempotency, Event Store, subscriptions, cancellation deadlines, crash
+fencing, and recovery. Pi session entries are only a private checkpoint passed
+back to the Scheduler after a successful Attempt.
+
 ## Implemented boundary
 
 - `initialize`, `session/new`, `session/prompt`, `session/cancel`,
@@ -36,6 +43,7 @@ sideagentd policy and public configuration contract are frozen.
 ```bash
 npm ci --prefix runtime
 npm run test:acp --prefix runtime
+npm run test:scheduler --prefix runtime
 npm run test:plugin --prefix runtime
 npm run start:acp --prefix runtime
 ```

@@ -69,6 +69,7 @@ plugins/catalog/          Plugin 开发约定和示例清单
 libraries/file-broker/    Android 文件能力适配器
 libraries/mcp-client/     Streamable HTTP MCP 客户端
 runtime/                  Agent JS 参考实现和 Node 契约测试
+system/agent/daemon/      sideagentd Scheduler、Session Store 和 Worker 参考实现
 tools/android/            本地 Android 构建、设备测试和调试脚本
 docs/                     架构、迁移和开发文档
 ```
@@ -102,6 +103,7 @@ node runtime/build.mjs
 node runtime/plugin-contract-test.mjs
 node runtime/runtime-plugin-test.mjs
 npm run test:acp --prefix runtime
+npm run test:scheduler --prefix runtime
 ```
 
 Android 原型的设备测试仍使用本地 `Pixel_8a` AVD。系统组件的编译和 Cuttlefish 验证会在 `platform/checkout` 可用后加入 CI 矩阵。

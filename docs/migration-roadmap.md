@@ -12,6 +12,7 @@
 
 ## M1：sideagentd 骨架
 
+- [x] 添加独立的 Session Store、Session Scheduler 和 Worker 参考实现（无 Binder、无真实模型）。
 - [ ] 添加最小 daemon 可执行文件和健康接口。
 - [ ] 添加 init service 描述和独立 SELinux domain。
 - [ ] 注册稳定 Binder 服务。
@@ -26,8 +27,8 @@
 
 ## M3：输出管道和存储
 
-- [ ] 实现事件日志和 per-session sequence。
-- [ ] 实现 snapshot + afterSequence 重连。
+- [x] 在 Scheduler 参考实现中验证事件日志、per-session sequence 和 Snapshot + afterSequence 恢复。
+- [ ] 将参考实现的 Store 接入系统 daemon 的正式生命周期。
 - [ ] 把 Task Store 从原型 JSON 文件迁移到 SQLite/WAL。
 - [ ] 为副作用工具增加 operation record 和幂等键。
 

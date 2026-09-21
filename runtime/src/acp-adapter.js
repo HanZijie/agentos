@@ -57,7 +57,7 @@ function contentToPrompt(blocks) {
         break;
       case 'resource':
         if ('text' in block.resource) parts.push(block.resource.text);
-        else parts.push(`[embedded resource: ${block.resource.mimeType ?? 'unknown'}]`);
+        else throw new Error('Binary embedded resources are not supported');
         break;
       case 'audio':
         throw new Error('Pi ACP adapter does not support audio prompts yet');
@@ -70,10 +70,10 @@ function contentToPrompt(blocks) {
 
 const stopReason = (record) => {
   if (record.cancelRequested) return 'cancelled';
-  const error = record.session.agent.state.errorMessage?.toLowerCase() ?? '';
-  if (error.includes('max_tokens') || error.includes('maxtokens')) return 'max_tokens';
-  if (error.includes('max_turn')) return 'max_turn_requests';
-  if (error.includes('refusal')) return 'refusal';
+  const last = record.session.messages?.findLast(m => m.role === 'assistant');
+  if (last?.stopReason === 'error') throw new Error('pi_runtime_failed');
+  if (last?.stopReason === 'aborted') return 'cancelled';
+  if (last?.stopReason === 'length') return 'max_tokens';
   return 'end_turn';
 };
 
@@ -114,10 +114,15 @@ export class PiAcpAgent {
       cancelRequested: false,
       promptActive: false,
       toolUnsubscribe: undefined,
+      output: Promise.resolve(),
+      outputError: null,
+      permissionAbort: new AbortController(),
     };
     this.installPermissionBridge(record);
     record.toolUnsubscribe = session.subscribe((event) => {
-      void this.translateEvent(record, event).catch(() => {});
+      record.output = record.output.then(() => this.translateEvent(record, event)).catch(error => {
+        record.outputError = error;
+      });
     });
     this.sessions.set(record.id, record);
     return { sessionId: record.id };
@@ -128,6 +133,7 @@ export class PiAcpAgent {
     if (record.promptActive) throw new Error('session/prompt is already running');
     const prompt = contentToPrompt(params.prompt);
     record.cancelRequested = false;
+    record.permissionAbort = new AbortController();
     record.promptActive = true;
     try {
       await record.session.prompt(prompt.message, {
@@ -135,7 +141,15 @@ export class PiAcpAgent {
         source: 'rpc',
         expandPromptTemplates: true,
       });
+      await record.session.waitForIdle?.();
+      await record.output;
+      if (record.outputError) throw record.outputError;
       return { stopReason: stopReason(record) };
+    } catch (error) {
+      await record.output;
+      if (record.outputError) throw record.outputError;
+      if (record.cancelRequested) return { stopReason: 'cancelled' };
+      throw error;
     } finally {
       record.promptActive = false;
     }
@@ -145,6 +159,7 @@ export class PiAcpAgent {
     const record = this.sessions.get(params.sessionId);
     if (!record) return;
     record.cancelRequested = true;
+    record.permissionAbort.abort();
     await record.session.abort();
   }
 
@@ -152,6 +167,7 @@ export class PiAcpAgent {
     const record = this.sessions.get(params.sessionId);
     if (!record) return {};
     record.cancelRequested = true;
+    record.permissionAbort.abort();
     if (record.promptActive) await record.session.abort();
     record.toolUnsubscribe?.();
     record.session.dispose();
@@ -179,11 +195,21 @@ export class PiAcpAgent {
 
   installPermissionBridge(record) {
     const original = record.session.agent.beforeToolCall;
-    record.session.agent.beforeToolCall = async (context) => {
-      const existing = await original?.(context);
+    record.session.agent.beforeToolCall = async (context, signal) => {
+      const existing = await original?.(context, signal);
       if (existing?.block) return existing;
       const toolCallId = context.toolCall.id;
-      const response = await record.connection.requestPermission({
+      await record.output;
+      if (record.outputError) throw record.outputError;
+      const permissionSignal = record.permissionAbort.signal;
+      if (permissionSignal.aborted) return { block: true, reason: 'Cancelled' };
+      let onAbort;
+      const cancelled = new Promise(resolve => {
+        onAbort = () => resolve({ outcome: { outcome: 'cancelled' } });
+        permissionSignal.addEventListener('abort', onAbort, { once: true });
+      });
+      let response;
+      try { response = await Promise.race([cancelled, record.connection.requestPermission({
         sessionId: record.id,
         toolCall: {
           toolCallId,
@@ -197,8 +223,8 @@ export class PiAcpAgent {
           { optionId: 'allow_once', name: 'Allow once', kind: 'allow_once' },
           { optionId: 'reject_once', name: 'Reject', kind: 'reject_once' },
         ],
-      });
-      if (response.outcome.outcome !== 'selected' || response.outcome.optionId.startsWith('reject')) {
+      })]); } finally { permissionSignal.removeEventListener('abort', onAbort); }
+      if (permissionSignal.aborted || response.outcome.outcome !== 'selected' || response.outcome.optionId !== 'allow_once') {
         return { block: true, terminate: true, reason: 'Tool execution was not approved' };
       }
       return undefined;
@@ -242,6 +268,7 @@ export class PiAcpAgent {
           toolCallId: event.toolCallId,
           status: event.isError ? 'failed' : 'completed',
           rawOutput: event.result,
+          content: (event.result?.content ?? []).filter(c => ['text', 'image'].includes(c.type)).map(content => ({ type: 'content', content })),
         },
       });
     }
