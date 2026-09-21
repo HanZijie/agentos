@@ -8,6 +8,7 @@ soong_namespace {
 
 aidl_interface {
     name: "agentos_system_aidl",
+    owner: "agentos",
     srcs: [
         "aidl/com/example/agentos/*.aidl",
     ],
