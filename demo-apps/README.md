@@ -28,4 +28,6 @@ APK 输出在各模块的 `build/outputs/apk/debug/`。记录 App 安装在运�
 
 ## 演示边界
 
-这些 App 使用应用私有 JSON 文件保存数据，目的是验证跨 App 能力路径和最小用户流程，不是生产级日历或提醒服务。记录 App 的 MCP token、端口和会话都由进程运行时生成，仅绑定 `127.0.0.1`，没有写入仓库。
+这些 App 使用应用私有 JSON 文件保存数据，目的是验证跨 App 能力路径和最小用户流程，不是生产级日历或提醒服务。记录 App 的 MCP 服务只绑定 `127.0.0.1`、拒绝带 `Origin` 的请求，不把认证凭据写入 Plugin descriptor；端口和会话都由进程运行时生成，没有写入仓库。
+
+当前 Agenriod Host 仍使用迁移期同步 `describe()/invoke()` endpoint；AOSP endpoint 只实现最新 bootstrap 的 protocol v3 descriptor 握手。上游的 `beginInvoke`、lease、cancel 和 sink 数据面还未在 AOSP overlay 中落地，因此这部分用于验证发现/握手兼容，不宣称已经完成系统级 Plugin 调用。

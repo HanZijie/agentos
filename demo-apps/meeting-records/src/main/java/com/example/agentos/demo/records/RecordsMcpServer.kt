@@ -12,10 +12,9 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 
-/** Minimal authenticated Streamable HTTP MCP server for the demo Plugin. */
+/** Minimal loopback-only Streamable HTTP MCP server for the demo Plugin. */
 internal class RecordsMcpServer(private val repository: RecordsRepository) : AutoCloseable {
     private val server = ServerSocket(0, 8, InetAddress.getByName("127.0.0.1"))
-    private val token = UUID.randomUUID().toString()
     private val sessions = ConcurrentHashMap<String, Boolean>()
     private val workers = Executors.newFixedThreadPool(2)
 
@@ -24,7 +23,6 @@ internal class RecordsMcpServer(private val repository: RecordsRepository) : Aut
             .put("id", "records")
             .put("transport", "streamable-http")
             .put("url", "http://127.0.0.1:${server.localPort}/mcp")
-            .put("headers", JSONObject().put("Authorization", "Bearer $token"))
 
     init {
         thread(name = "records-mcp-listener", isDaemon = true) {
@@ -64,7 +62,9 @@ internal class RecordsMcpServer(private val repository: RecordsRepository) : Aut
     }
 
     private fun process(socket: Socket, method: String, headers: Map<String, String>, input: InputStream) {
-        if (headers["authorization"] != "Bearer $token" || headers.containsKey("origin")) {
+        // The endpoint is process-local and rejects browser-style cross-origin
+        // requests. No credential is placed in the Plugin descriptor.
+        if (headers.containsKey("origin")) {
             respond(socket, 403)
             return
         }
