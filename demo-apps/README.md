@@ -10,18 +10,18 @@
 
 ## 构建
 
-在本目录的上一级仓库根目录（`agenriod/`）执行：
+在 `agenriod/` 仓库根目录执行（Android Gradle 命令统一经过工具脚本）：
 
 ```bash
-./gradlew -p demo-apps :meeting-records:assembleDebug
-./gradlew -p demo-apps :calendar:assembleDebug
-./gradlew -p demo-apps :alarm:assembleDebug
+./tools/android/android.sh gradle -p demo-apps :meeting-records:assembleDebug
+./tools/android/android.sh gradle -p demo-apps :calendar:assembleDebug
+./tools/android/android.sh gradle -p demo-apps :alarm:assembleDebug
 ```
 
 或一次构建三个 APK：
 
 ```bash
-./gradlew -p demo-apps :meeting-records:assembleDebug :calendar:assembleDebug :alarm:assembleDebug
+./tools/android/android.sh gradle -p demo-apps :meeting-records:assembleDebug :calendar:assembleDebug :alarm:assembleDebug
 ```
 
 APK 输出在各模块的 `build/outputs/apk/debug/`。记录 App 安装在运行中的 AgentOS 主 App 同一设备后，打开记录 App 即可激活 `meeting-records` Plugin；没有 AgentOS Host 时，记录编辑功能仍可单独使用，Plugin 注册会自动等待 Host。
