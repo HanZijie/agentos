@@ -12,8 +12,13 @@ aidl_interface {
     srcs: [
         "aidl/com/example/agentos/*.aidl",
     ],
+    frozen: true,
     stability: "vintf",
-    versions: ["1"],
+    versions_with_info: [
+        {
+            version: "1",
+        },
+    ],
     backend: {
         cpp: { enabled: false },
         java: { enabled: true },
