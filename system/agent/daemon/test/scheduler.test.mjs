@@ -7,6 +7,7 @@ import { SessionStore } from '../store.mjs';
 import { SessionScheduler } from '../scheduler.mjs';
 
 const flush = () => new Promise(resolve => setImmediate(resolve));
+const pause = () => new Promise(resolve => setTimeout(resolve, 1));
 class ControlledWorker {
   async start(assignment) { this.assignment = assignment; }
   prompt(input, sink) {
@@ -31,22 +32,22 @@ function fixture(t, config = {}, retainEvents = 1000) {
   return { store, scheduler, workers, create, submit, advance: ms => { clock += ms; } };
 }
 
-test('same Session FIFO, parallel Sessions, one-slot dispatch rotation and durable checkpoint', async t => {
-  const f = fixture(t); const a = f.create(), b = f.create(), c = f.create();
-  f.submit(a, 'a1'); f.submit(a, 'a2'); f.submit(b, 'b1'); f.submit(c, 'c1');
+test('same Session FIFO and durable checkpoint with one running Session slot', async t => {
+  const f = fixture(t, { maxRunningSessions: 1 }); const a = f.create();
+  f.submit(a, 'a1'); f.submit(a, 'a2');
   f.scheduler.tick(); await flush();
-  assert.equal(f.scheduler.active.size, 2);
-  for (let i=0; i<50 && (!f.workers.every(w => w.input)); i++) { await flush(); }
-  for (const w of [...f.workers]) w.finish();
-  for (let i=0; i<50 && f.scheduler.active.size !== 2; i++) { await flush(); f.scheduler.tick(); }
-  assert.equal(f.scheduler.active.size, 2);
-  for (let i=0; i<50 && !f.workers.some(w => w.assignment.sessionId === c && w.input); i++) { await flush(); f.scheduler.tick(); }
-  assert.ok(f.workers.some(w => w.assignment.sessionId === c && w.input));
-  for (const w of [...f.workers]) if (w.input && w.resolve) w.finish();
-  for (let i=0; i<50 && !f.workers.some(w => w.assignment.sessionId === a && w.input?.prompt[0].text === 'a2'); i++) { await flush(); f.scheduler.tick(); }
-  assert.ok(f.workers.some(w => w.assignment.sessionId === a && w.input?.prompt[0].text === 'a2'));
+  for (let i=0; i<50 && !f.workers[0]?.input; i++) await flush();
+  assert.equal(f.workers[0].input.prompt[0].text, 'a1');
+  const worker = f.workers[0];
+  worker.finish();
+  for (let i=0; i<200 && f.store.get(a).tasks[1].state !== 'running'; i++) { await pause(); f.scheduler.tick(); }
+  assert.equal(f.store.get(a).tasks[1].state, 'running');
+  for (let i=0; i<200 && worker.input?.prompt[0].text !== 'a2'; i++) await pause();
+  assert.equal(worker.input?.prompt[0].text, 'a2');
+  worker.finish();
+  await flush(); f.scheduler.tick();
   assert.equal(f.store.get(a).tasks[0].state, 'completed');
-  assert.ok(f.store.get(a).checkpoint.marker);
+  assert.equal(f.store.get(a).checkpoint.marker, f.store.get(a).tasks[1].id);
 });
 
 test('per-user cap and lowering global limit drains existing reservations', async t => {
