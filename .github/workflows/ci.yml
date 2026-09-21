@@ -25,7 +25,8 @@ jobs:
       - name: Check architecture and shell syntax
         run: |
           ./tools/ci/check-architecture.sh
-          bash -n tools/android/android.sh tools/ci/check-architecture.sh
+          ./tools/ci/check-aosp-overlay.sh
+          bash -n tools/android/android.sh tools/ci/check-architecture.sh tools/ci/check-aosp-overlay.sh tools/aosp/prepare-overlay.sh
       - name: Inspect the changed files
         id: changes
         env:

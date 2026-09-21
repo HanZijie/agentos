@@ -1,0 +1,2 @@
+/system/bin/sideagentd                         u:object_r:sideagentd_exec:s0
+/data/agent(/.*)?                               u:object_r:sideagentd_data_file:s0

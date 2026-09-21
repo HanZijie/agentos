@@ -1,0 +1,36 @@
+// Bootstrap overlay for the first AgentOS system slice.
+// Add system/agent to PRODUCT_SOONG_NAMESPACES in the selected AOSP product.
+// This module is intentionally separate from the reference Node runtime in
+// the repository's system/agent/daemon directory.
+soong_namespace {
+    imports: [],
+}
+
+aidl_interface {
+    name: "agentos_system_aidl",
+    srcs: [
+        "aidl/com/example/agentos/*.aidl",
+    ],
+    stability: "vintf",
+    versions: ["1"],
+    backend: {
+        cpp: { enabled: false },
+        java: { enabled: true },
+        ndk: { enabled: true },
+    },
+}
+
+cc_binary {
+    name: "sideagentd",
+    srcs: ["sideagentd/main.cpp"],
+    shared_libs: [
+        "libbase",
+        "libbinder_ndk",
+    ],
+    static_libs: ["agentos_system_aidl-V1-ndk"],
+    init_rc: ["init/sideagentd.rc"],
+    // The init rc uses /system/bin/sideagentd. Keep this system-installed
+    // until a product-specific path is selected and recorded in the rc.
+    product_specific: false,
+    cflags: ["-DLOG_TAG=\"sideagentd\""],
+}

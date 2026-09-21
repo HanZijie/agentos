@@ -14,14 +14,14 @@
 ## M1：sideagentd 骨架
 
 - [x] 添加独立的 Session Store、Session Scheduler 和 Worker 参考实现（无 Binder、无真实模型）。
-- [ ] 添加最小 daemon 可执行文件和健康接口。
-- [ ] 添加 init service 描述和独立 SELinux domain。
-- [ ] 注册稳定 Binder 服务。
+- [~] 添加最小 daemon 可执行文件和健康接口（AOSP bootstrap overlay 已提供，待目标分支编译）。
+- [~] 添加 init service 描述和独立 SELinux domain（overlay 已提供，待 AID、产品和 neverallow 验证）。
+- [~] 注册稳定 Binder 服务（`agentos.sideagentd` health service 已定义，待 AOSP service manager 验证）。
 - [ ] 提供 `dumpsys agent` 和 `cmd agent health`。
 
 ## M2：AgentManagerService
 
-- [ ] 在 `system_server` 中加入控制面服务。
+- [~] 在 overlay 中加入控制面服务骨架：manifest discovery、per-user enablement、按需 bind 和 health 查询；待接入 `SystemServer`。
 - [ ] 处理 sideagentd 的 Binder death、重连和状态恢复。
 - [ ] 添加 user start/stop/unlock 生命周期。
 - [ ] 只向系统签名的前端暴露控制接口。
@@ -47,9 +47,9 @@
 - [x] daemon 参考实现 `PluginBroker`：descriptor v3 校验、启用状态、按需绑定/握手、invoke 与 resource/reminder 管道、lease 接线；契约 §13 reference tests 1–12 通过。
 
 - [ ] 由 system_server 校验 Plugin UID、签名和版本。
-- [ ] manifest 发现、`BIND_AGENT_PLUGIN` 权限与 per-user 启用状态。
-- [ ] 按需 `BIND_AUTO_CREATE` 拉起/解冻与空闲 unbind；freezer 与 phantom process killer 验证及调优（平台验证项）。
-- [ ] `openPluginSession` 握手、descriptor v3 校验与 policy 过滤。
+- [~] manifest 发现、`BIND_AGENT_PLUGIN` 权限与 per-user 启用状态（bootstrap discovery skeleton 已提供，持久化待接入）。
+- [~] 按需 `BIND_AUTO_CREATE` 拉起/解冻与空闲 unbind；freezer 与 phantom process killer 验证及调优（平台验证项）。
+- [~] `openPluginSession` 握手、descriptor v3 校验与 policy 过滤（bootstrap endpoint AIDL 已定义，完整 capability seam 待接入）。
 - [ ] 将 Plugin capability 句柄传递给 sideagentd。
 - [ ] tool 调用管道：requestId 幂等、取消、deadline、幂等键与操作记录。
 - [ ] resource 读取与 system reminder 注入管道：turn boundary 拉取、预算与确定性截断、非重放诊断记录。
