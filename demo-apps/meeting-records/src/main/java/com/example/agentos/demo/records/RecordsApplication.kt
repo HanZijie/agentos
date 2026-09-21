@@ -10,6 +10,8 @@ class RecordsApplication : Application() {
     private lateinit var mcp: RecordsMcpServer
     internal lateinit var endpoint: RecordsPluginEndpoint
         private set
+    internal lateinit var systemEndpoint: SystemPluginEndpoint
+        private set
     private lateinit var registration: PluginProcessRegistration
 
     override fun onCreate() {
@@ -17,6 +19,7 @@ class RecordsApplication : Application() {
         repository = RecordsRepository(this)
         mcp = RecordsMcpServer(repository)
         endpoint = RecordsPluginEndpoint(repository, mcp.configuration)
+        systemEndpoint = SystemPluginEndpoint(this, repository, mcp.configuration)
         registration = PluginProcessRegistration(this, endpoint)
     }
 

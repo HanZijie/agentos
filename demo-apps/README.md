@@ -2,11 +2,11 @@
 
 这个目录是一个独立的 Android Gradle 根目录，用来演示 AgentOS 的三个普通 App 能力：
 
-- `meeting-records`：会议纪要记录，支持本地增删改查；打开 App 后会向 AgentOS Host 注册 Plugin，并暴露一个 loopback Streamable HTTP MCP server。
+- `meeting-records`：会议纪要记录，支持本地增删改查；同时保留当前 Agenriod Host 的迁移期 Plugin endpoint，并新增 AOSP bootstrap protocol v3 endpoint；打开 App 后还会暴露一个 loopback Streamable HTTP MCP server。
 - `calendar`：本地日程编辑器，支持创建、编辑、删除日程，并用日期/时间选择器填写表单。
 - `alarm`：本地闹钟，支持设置、启用/停用和删除一次性闹钟；触发时通过 Android 通知提醒。
 
-这个 Gradle 根目录没有被加入主工程的 `settings.gradle.kts`。因此它不会改变主工程的模块图，也不会参与主工程默认构建。`plugin-api` 只读复用 `../plugins/api` 的稳定契约源码，没有复制或修改主工程文件。
+这个 Gradle 根目录没有被加入主工程的 `settings.gradle.kts`。因此它不会改变主工程的模块图，也不会参与主工程默认构建。`plugin-api` 只读复用 `../plugins/api` 的迁移期契约源码，没有复制或修改主工程文件。记录 App 额外内置了 AOSP bootstrap 所需的两份最小 AIDL，当前 overlay 尚未接入可调用的 tool/resource 数据面，因此它只负责 protocol v3 握手和 descriptor 声明。
 
 ## 构建
 

@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="com.example.agenriod.permission.BIND_AGENT_PLUGIN" />
+    <uses-permission android:name="com.example.agentos.permission.BIND_AGENT_PLUGIN" />
 
     <queries>
         <package android:name="com.example.agenriod" />
@@ -31,6 +32,18 @@
             <meta-data
                 android:name="com.example.agenriod.PLUGIN_ID"
                 android:value="meeting-records" />
+        </service>
+        <!-- AOSP bootstrap endpoint. The migration endpoint above remains for the current Agenriod Host. -->
+        <service
+            android:name=".SystemPluginEndpointService"
+            android:exported="true"
+            android:permission="com.example.agentos.permission.BIND_AGENT_PLUGIN">
+            <intent-filter>
+                <action android:name="agentos.intent.action.PLUGIN_ENDPOINT" />
+            </intent-filter>
+            <meta-data
+                android:name="agentos.plugin.id"
+                android:value="com.example.agentos.demo.records" />
         </service>
     </application>
 </manifest>

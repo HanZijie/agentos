@@ -46,14 +46,34 @@ for name in tracked:
 
 settings = Path("settings.gradle.kts").read_text()
 projects = set(re.findall(r'"(:[^" ]+)"', settings))
+
+# The repository may contain an intentionally isolated Gradle root (for
+# example demo-apps/). Resolve project() references against the nearest
+# settings.gradle.kts instead of assuming every module belongs to the main
+# AgentOS settings file.
+settings_cache = {Path("settings.gradle.kts"): projects}
+
+def scoped_projects(path):
+    parent = path.parent
+    while True:
+        candidate = parent / "settings.gradle.kts"
+        if candidate.is_file():
+            if candidate not in settings_cache:
+                settings_cache[candidate] = set(re.findall(r'"(:[^" ]+)"', candidate.read_text()))
+            return settings_cache[candidate]
+        if parent == Path("."):
+            return projects
+        parent = parent.parent
+
 for project in projects:
     if not Path(project[1:].replace(":", "/"), "build.gradle.kts").is_file():
         errors.append(f"Missing Gradle module: {project}")
 for name in tracked:
     path = Path(name)
     if path.name == "build.gradle.kts" and path.is_file():
+        scoped = scoped_projects(path)
         for dep in re.findall(r'project\("(:[^" ]+)"\)', path.read_text()):
-            if dep not in projects:
+            if dep not in scoped:
                 errors.append(f"Unknown Gradle dependency in {name}: {dep}")
 
 if errors:
