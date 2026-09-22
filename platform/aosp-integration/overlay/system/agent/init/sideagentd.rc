@@ -1,10 +1,11 @@
+on post-fs-data
+    mkdir /data/agent 0700 sideagent sideagent
+    restorecon_recursive /data/agent
+
 service sideagentd /system/bin/sideagentd
-    class core
+    class main
     user sideagent
     group sideagent
     seclabel u:r:sideagentd:s0
 
-# Keep the process under init supervision. The daemon owns no model or Plugin
-# state yet; the next slice adds durable state and Binder reconnect handling.
-on property:sys.boot_completed=1
-    restart sideagentd
+# init supervises and restarts the daemon on exit. No boot-complete restart.

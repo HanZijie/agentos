@@ -1,15 +1,17 @@
-type sideagentd, domain;
+type sideagentd, domain, coredomain;
 type sideagentd_exec, exec_type, system_file_type, file_type;
 type sideagentd_data_file, file_type, data_file_type, core_data_file_type;
 type sideagent_service, service_manager_type;
+type agentos_service, system_server_service, service_manager_type;
 
 init_daemon_domain(sideagentd)
-allow sideagentd self:capability { setgid setuid };
 allow sideagentd sideagentd_data_file:dir create_dir_perms;
 allow sideagentd sideagentd_data_file:file create_file_perms;
-allow sideagentd self:unix_stream_socket create_stream_socket_perms;
-allow sideagentd servicemanager:binder { call transfer };
+binder_use(sideagentd)
 add_service(sideagentd, sideagent_service)
+allow system_server sideagent_service:service_manager find;
+binder_call(system_server, sideagentd)
+allow shell agentos_service:service_manager find;
 
 # Do not grant app Binder access in this bootstrap slice. The capability
 # endpoint policy is added only with the versioned Plugin AIDL and its tests.

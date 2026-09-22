@@ -92,7 +92,11 @@ public final class AgentManagerService extends SystemService {
     }
 
     @Override public void onStart() {
-        publishBinderService("agentos", new BinderService());
+        BinderService service = new BinderService();
+        // Versioned API shared with apps, but this instance is a system service,
+        // not a vendor HAL declared in a VINTF device manifest.
+        service.forceDowngradeToSystemStability();
+        publishBinderService("agentos", service);
     }
 
     @Override public void onBootPhase(int phase) {
@@ -121,6 +125,18 @@ public final class AgentManagerService extends SystemService {
                 if (mStartedUsers.contains(userId)) scanUser(userId);
             }
         }, UserHandle.ALL, filter, null, mHandler);
+        getContext().registerReceiverAsUser(new BroadcastReceiver() {
+            @Override public void onReceive(Context context, Intent intent) {
+                int userId = intent.getIntExtra(Intent.EXTRA_USER_HANDLE, -1);
+                if (userId < 0) return;
+                stopUser(userId);
+                ArrayMap<String, String> next = new ArrayMap<>(mEnabled);
+                String prefix = userId + "/";
+                for (int i = next.size() - 1; i >= 0; i--)
+                    if (next.keyAt(i).startsWith(prefix)) next.removeAt(i);
+                persistQuietly(next);
+            }
+        }, UserHandle.ALL, new IntentFilter(Intent.ACTION_USER_REMOVED), null, mHandler);
         mHandler.post(() -> startUser(UserHandle.USER_SYSTEM));
     }
 
@@ -295,6 +311,7 @@ public final class AgentManagerService extends SystemService {
         ServiceConnection connection = new ServiceConnection() {
             @Override public void onServiceConnected(ComponentName name, IBinder binder) {
                 if (record.connection != this) return;
+                if (record.timeout != null) mHandler.removeCallbacks(record.timeout);
                 record.endpoint = IAgentPluginEndpoint.Stub.asInterface(binder);
                 record.sessionId = UUID.randomUUID().toString();
                 record.state = "handshaking";
@@ -333,6 +350,8 @@ public final class AgentManagerService extends SystemService {
         };
         record.connection = connection;
         record.state = "binding";
+        record.timeout = () -> fail(record, connection, "bind_timeout");
+        mHandler.postDelayed(record.timeout, HANDSHAKE_TIMEOUT_MS);
         try {
             if (!getContext().bindServiceAsUser(new Intent().setComponent(record.component),
                     connection, Context.BIND_AUTO_CREATE, mHandler, UserHandle.of(record.userId))) {
@@ -376,8 +395,15 @@ public final class AgentManagerService extends SystemService {
         ArrayMap<String, String> next = new ArrayMap<>(mEnabled);
         if (enabled) next.put(keyFor(userId, id), record.signer);
         else next.remove(keyFor(userId, id));
-        persist(next);
-        if (enabled) bindEnabled(record); else unbind(record);
+        if (enabled) {
+            persist(next);
+            bindEnabled(record);
+        } else {
+            // Revoke before disk I/O: failed persistence must not leave a live grant.
+            mEnabled = next;
+            unbind(record);
+            persist(next);
+        }
     }
 
     private <T> T control(Callable<T> operation) {

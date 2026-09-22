@@ -1,0 +1,9 @@
+android_app {
+    name: "AgentOsPluginProbe",
+    manifest: "AndroidManifest.xml",
+    srcs: ["src/**/*.java"],
+    static_libs: ["agentos_system_aidl-V1-java"],
+    platform_apis: true,
+    optimize: { enabled: false },
+    dex_preopt: { enabled: false },
+}

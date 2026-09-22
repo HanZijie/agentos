@@ -1,1 +1,2 @@
 agentos.sideagentd                              u:object_r:sideagent_service:s0
+agentos                                        u:object_r:agentos_service:s0

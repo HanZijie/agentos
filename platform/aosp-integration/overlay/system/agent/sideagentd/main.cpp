@@ -1,5 +1,7 @@
 #include <android/binder_manager.h>
 #include <android/binder_process.h>
+#include <android/binder_stability.h>
+#include <android/binder_ibinder.h>
 #include <android-base/logging.h>
 
 #include <chrono>
@@ -18,6 +20,10 @@ class Sideagentd final : public BnSideagentd {
   Sideagentd() : started_at_ms_(NowMs()) {}
 
   ScopedAStatus getHealth(AgentHealth* out) override {
+    const uid_t caller = AIBinder_getCallingUid();
+    if (caller != 0 && caller != 1000) {
+      return ScopedAStatus::fromExceptionCode(EX_SECURITY);
+    }
     if (out == nullptr) return ScopedAStatus::fromExceptionCode(EX_NULL_POINTER);
     out->protocolVersion = 1;
     out->state = "ready";
@@ -44,8 +50,11 @@ int main() {
   ABinderProcess_setThreadPoolMaxThreadCount(4);
 
   auto service = ndk::SharedRefBase::make<Sideagentd>();
+  // This named service belongs to the system partition, not a vendor HAL.
+  auto binder = service->asBinder();
+  AIBinder_forceDowngradeToSystemStability(binder.get());
   const binder_status_t status =
-      AServiceManager_addService(service->asBinder().get(), "agentos.sideagentd");
+      AServiceManager_addService(binder.get(), "agentos.sideagentd");
   if (status != STATUS_OK) {
     LOG(ERROR) << "Unable to publish agentos.sideagentd: " << status;
     return 1;
