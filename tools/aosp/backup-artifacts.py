@@ -117,7 +117,7 @@ def default_local_dir():
     # Keep generated evidence one directory above the git checkout so it can
     # never accidentally be included by a broad git add.
     workspace = Path(__file__).resolve().parents[3]
-    return workspace / ".local" / "aosp-artifacts" / datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+    return workspace / ".local" / "aosp-artifacts" / (datetime.datetime.now(datetime.timezone.utc).date().isoformat() + "-rebuild")
 
 
 def sha256_file(path):
@@ -349,7 +349,7 @@ def main():
     parser.add_argument("--evidence-root", action="append", default=None,
                         help="Curated remote evidence directory; repeatable (defaults to /mnt/aosp-out/evidence and /mnt/aosp-out/logs)")
     parser.add_argument("--local-dir", type=Path, default=default_local_dir(),
-                        help="Local backup root (defaults outside this checkout under .local/aosp-artifacts/YYYY-MM-DD)")
+                        help="Local backup root (defaults outside this checkout under .local/aosp-artifacts/YYYY-MM-DD-rebuild)")
     parser.add_argument("--rsync", help="Path to a modern local rsync")
     parser.add_argument("--interval", type=float, default=60)
     parser.add_argument("--settle-seconds", type=float, default=30, help="Minimum image/package mtime and ctime age")
