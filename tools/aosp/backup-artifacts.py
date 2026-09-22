@@ -113,6 +113,13 @@ def utc_now():
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
+def default_local_dir():
+    # Keep generated evidence one directory above the git checkout so it can
+    # never accidentally be included by a broad git add.
+    workspace = Path(__file__).resolve().parents[3]
+    return workspace / ".local" / "aosp-artifacts" / datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+
+
 def sha256_file(path):
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -235,6 +242,7 @@ class Backup:
         if self.already_verified(item, final, record):
             return "verified"
         before = self.remote.hash(item["path"])
+        record["remote_before"] = before
         if not before["stable"] or before["stat"] != item["stat"]:
             return "pending: source changed before transfer"
         partial = safe_destination(self.root / ".partial", key)
@@ -246,10 +254,12 @@ class Backup:
         atomic_json(source_record, before)
         self.remote.copy(item["path"], partial)
         after = self.remote.hash(item["path"])
+        record["remote_after"] = after
         if (not after["stable"] or before["stat"] != after["stat"]
                 or before["sha256"] != after["sha256"]):
             return "pending: source changed during transfer"
         local_digest = sha256_file(partial)
+        record["local_sha256"] = local_digest
         if local_digest != after["sha256"] or partial.stat().st_size != after["stat"]["size"]:
             partial.unlink()  # A full-length damaged partial cannot be fixed by append mode.
             raise RuntimeError("Local SHA-256/size does not match remote; retry needs a fresh copy")
@@ -313,9 +323,12 @@ def main():
     mode.add_argument("--once", action="store_true", help="One scan (default)")
     mode.add_argument("--watch", action="store_true", help="Scan repeatedly in this local process")
     parser.add_argument("--host", default="agentos-aosp", help="Existing SSH alias")
-    parser.add_argument("--remote-out", required=True, help="Remote AOSP OUT_DIR or flat download directory")
-    parser.add_argument("--evidence-root", action="append", default=[], help="Curated remote evidence directory; repeatable")
-    parser.add_argument("--local-dir", type=Path, required=True)
+    parser.add_argument("--remote-out", default="/mnt/aosp-out/aosp-out",
+                        help="Remote AOSP OUT_DIR or flat download directory")
+    parser.add_argument("--evidence-root", action="append", default=None,
+                        help="Curated remote evidence directory; repeatable (defaults to /mnt/aosp-out/evidence and /mnt/aosp-out/logs)")
+    parser.add_argument("--local-dir", type=Path, default=default_local_dir(),
+                        help="Local backup root (defaults outside this checkout under .local/aosp-artifacts/YYYY-MM-DD)")
     parser.add_argument("--rsync", help="Path to a modern local rsync")
     parser.add_argument("--interval", type=float, default=60)
     parser.add_argument("--settle-seconds", type=float, default=30, help="Minimum image/package mtime and ctime age")
@@ -325,6 +338,7 @@ def main():
         parser.error("--host must be an SSH alias")
     if args.interval <= 0 or args.timeout <= 0 or args.settle_seconds < 0:
         parser.error("interval/timeout must be positive and settle-seconds nonnegative")
+    args.evidence_root = args.evidence_root or ["/mnt/aosp-out/evidence", "/mnt/aosp-out/logs"]
     paths = [args.remote_out, *args.evidence_root]
     if any(not p.startswith("/") or any(ord(c) < 32 for c in p) for p in paths):
         parser.error("Remote roots must be absolute paths without control characters")
