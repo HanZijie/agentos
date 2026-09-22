@@ -139,6 +139,16 @@ def atomic_json(path, data):
     temporary.replace(path)
 
 
+def atomic_text(path, content):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    with temporary.open("w") as stream:
+        stream.write(content)
+        stream.flush()
+        os.fsync(stream.fileno())
+    temporary.replace(path)
+
+
 def safe_destination(root, key):
     relative = PurePosixPath(key)
     if (not key or relative.is_absolute() or ".." in relative.parts
@@ -308,6 +318,15 @@ class Backup:
         for key, record in self.index["files"].items():
             if key not in seen:
                 record["status"] = "source missing; retained local snapshot"
+        # A portable checksum list makes the backup independently auditable
+        # without understanding index.json's schema. It contains only files
+        # that passed the remote-before/after and local digest checks.
+        checksum_lines = []
+        for key, record in sorted(self.index["files"].items()):
+            verified_record = record.get("verified")
+            if verified_record and record.get("status", "").startswith(("verified", "source missing")):
+                checksum_lines.append(verified_record["sha256"] + "  " + key)
+        atomic_text(self.root / "SHA256SUMS", "".join(line + "\n" for line in checksum_lines))
         summary = {"artifacts_found": artifacts, "verified_files": verified,
                    "pending_files": pending, "errors": errors,
                    "missing_roots": inventory["missing_roots"]}

@@ -67,6 +67,8 @@ class BackupArtifactsTest(unittest.TestCase):
             self.assertTrue((destination / "index.json").is_file())
             checksum = destination / ".checksums/artifacts/target/product/aosp_cf_x86_64_only_phone/system.img.sha256"
             self.assertIn(hashlib.sha256(source.read_bytes()).hexdigest(), checksum.read_text())
+            self.assertIn(hashlib.sha256(source.read_bytes()).hexdigest(),
+                          (destination / "SHA256SUMS").read_text())
             self.assertEqual(list((destination / ".partial").glob("**/*.source.json")), [])
 
     def test_source_change_is_pending_and_never_published(self):
