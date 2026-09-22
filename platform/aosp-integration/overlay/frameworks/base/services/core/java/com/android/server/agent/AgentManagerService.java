@@ -437,6 +437,8 @@ public final class AgentManagerService extends SystemService {
             enforceSystemCaller();
             control(() -> { setEnabled(userId, pluginId, enabled); return null; });
         }
+        @Override public int getInterfaceVersion() { return IAgentManager.VERSION; }
+        @Override public String getInterfaceHash() { return IAgentManager.HASH; }
         @Override protected void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
             getContext().enforceCallingOrSelfPermission(Manifest.permission.DUMP, TAG);
             pw.println(control(() -> pluginsJson(-1)));
