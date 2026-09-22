@@ -26,6 +26,23 @@ been tested; the recipe depends on network access to the pinned Ubuntu mirror.
 The image and host package are still stock and contain no AgentOS system
 service.
 
+## AgentOS r34 image validation
+
+The replacement server built `android-15.0.0_r34` with
+`aosp_cf_x86_64_only_phone-trunk_staging-userdebug` and produced the Cuttlefish
+images plus host package. The final `m droid -j96` log returned `BUILD_RC=0`.
+The image set and hashes are recorded in `.local/aosp-artifacts/2026-09-23-aosp-final/`.
+
+A second Cuttlefish instance booted the custom image on ADB `127.0.0.1:6521` with
+`sys.boot_completed=1`. Runtime checks found `sideagentd` under UID 1096,
+`agentos` and `agentos.sideagentd` in the service manager, and
+`cmd agentos health` returned `state=ready`. Installing the built
+`AgentOsPluginProbe` showed manifest discovery; enabling it produced an active
+record and an `AgentOsProbe: open` handshake log. The probe's cgroup freeze
+files were both `0` during the check. The Cuttlefish host Bluetooth dependency
+was disabled for this service-focused run; Bluetooth readiness is a separate
+follow-up.
+
 ## App-level validation on stock Cuttlefish
 
 The repository's debug APKs were built, installed into the live stock guest,
