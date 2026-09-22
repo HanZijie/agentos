@@ -17,9 +17,10 @@ tools/aosp/                           接线、备份及其测试
 ## 当前证据（2026-09-22）
 
 - `62223a7` 已保存自动接线和真实测试 APK `AgentOsPluginProbe`；后续 `bfde761`、`1c163f3` 等提交补充了 Cuttlefish-only 接线、版本校验、仓库外备份及脚本测试。
-- 新主机的 SSH 指纹、两块数据盘挂载、CPU/内存、`/dev/kvm` 与主机 JDK 已记录。固定版本的 clang/Rust/build-tools 完整性、Soong 分析和源码构建仍需单独验证。
+- 新主机的 SSH 指纹、两块数据盘挂载、CPU/内存、`/dev/kvm` 与主机 JDK 已记录。frameworks/base、Go、clang 的 archive/tree 核对已通过；Rust 等同步、完整 resolved manifest、Soong 分析和源码构建尚未完成。
 - 官方 Cuttlefish **stock build `16373615`** 的 image zip 与 host package 已下载到本地并通过传输前后及本地 SHA-256 一致性校验。证据目录为仓库外的 `../.local/aosp-artifacts/2026-09-22-rebuild/fallback/`，其中 `index.json` 和 `SHA256SUMS` 记录校验结果。
-- stock Cuttlefish 启动尚未完成。本轮没有已完成的 AgentOS 自定义 Cuttlefish/Pixel 8 镜像，也没有 AgentOS 系统或真机测试结果。stock 包不包含本仓库 overlay，其 build ID 也不能代替 `android-15.0.0_r34` 源码构建证据。
+- 19:17 已验证 stock Cuttlefish 通过 QEMU 启动：ADB `127.0.0.1:6520` 为 `device`，`sys.boot_completed=1`，系统 build ID 为 `CP2A.260605.016`。19:19 本地备份 index 记录 93 个已校验文件、0 error、0 pending。环境、恢复参数和日志采集见 [stock Cuttlefish runbook](stock-cuttlefish.md)。
+- 本轮没有已完成的 AgentOS 自定义 Cuttlefish/Pixel 8 镜像，也没有 AgentOS 系统或真机测试结果。stock 包不含本仓库 overlay，`agentos` 服务缺失符合预期；该成功结果不能代替 `android-15.0.0_r34` 源码构建证据。ready 容器镜像的依赖尚未固化为 Dockerfile，干净主机复现也未验证。
 
 ## Overlay 与自动接线
 

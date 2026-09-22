@@ -19,15 +19,20 @@ checkout revision 校验、仓库外备份和 fixture tests。代码和 fixture 
 
 官方 stock Cuttlefish build `16373615` 的 image zip 与 host package 已在
 仓库外 `../.local/aosp-artifacts/2026-09-22-rebuild/fallback/` 完成 SHA-256
-校验并保存，`index.json` 与 `SHA256SUMS` 是当前证据；stock 包不含 AgentOS
-overlay，启动/ADB 尚未完成。本轮没有已完成的 AgentOS 自定义 Cuttlefish
+校验并保存。19:17 已验证 QEMU 启动、ADB `127.0.0.1:6520 device` 和
+`sys.boot_completed=1`；guest build ID 为 `CP2A.260605.016`。19:19 的
+`index.json` 记录 93 个已校验文件、0 error、0 pending，步骤与证据见
+[stock Cuttlefish runbook](stock-cuttlefish.md)。stock 包不含 AgentOS overlay，
+`agentos` 服务缺失符合预期。本轮没有已完成的 AgentOS 自定义 Cuttlefish
 或 Pixel 8 镜像，也没有 AgentOS 真机测试，因此不能标为 Ready。
 
 ## 0. 前置：checkout 与构建环境
 
 - [x] 选定目标 AOSP 版本为 `android-15.0.0_r34`，并在接线脚本中校验 manifest 默认 revision 及参与接线项目的 tag commit；Pixel 8（shiba）作为显式后续 target。
 - [~] `repo init` / `repo sync` 与 checkout 证据在新服务器上已重新开始，但远端 checkout、resolved manifest 和 patch 仍需保存到本地证据目录；AOSP 全量源码不进入仓库。
-- [ ] Cuttlefish `userdebug` lunch target 能启动并 adb 连接。
+- [x] 官方 stock Cuttlefish build `16373615` 通过 QEMU 启动并连接 ADB（19:17 的 `adb-baseline.txt`，路径见上述 runbook）。
+- [ ] 固定 `android-15.0.0_r34` 自定义 Cuttlefish `userdebug` target 完成构建、启动和 ADB 连接；stock 的 CP2A 系统不能替代该验收。
+- [~] frameworks/base、Go、clang 的 archive/tree 核对已通过；`pdk,linux` 同步仍不完整，并带入了属于 `pdk` 的 Darwin 项目；需明确排除 Darwin，补齐 Rust/misc 等输入并保存 resolved manifest。
 - [~] `tools/aosp/wire-platform.py` 负责按固定 tag 应用接线并把覆盖文件备份到 AOSP 根目录同级；构建前仍需导出 resolved manifest、repo diff/patch 和工具版本到本地证据目录。
 - [x] 主机验证记录已保存：两块 NVMe 挂载、96 vCPU、JDK 17、`/dev/kvm` 和磁盘状态见仓库外 `../.local/aosp-artifacts/2026-09-22-rebuild/fallback/evidence-0/environment.txt`；本地备份工具使用 `rsync --partial --append-verify` 和 SHA-256 双端校验。
 
@@ -91,7 +96,9 @@ overlay，启动/ADB 尚未完成。本轮没有已完成的 AgentOS 自定义 C
 
 ## 7. 系统测试（Cuttlefish，M6）
 
-- [~] 官方 stock Cuttlefish build `16373615` image/host 已本地 SHA-256 校验保存，但启动/ADB 尚未完成；AgentOS 自定义 sideagentd、SELinux 和 Binder 注册没有运行证据。
+- [x] 官方 stock Cuttlefish build `16373615` image/host 本地 SHA-256 校验、QEMU 启动和 ADB 已验证，证据见 [runbook](stock-cuttlefish.md)；此项仅覆盖 stock 系统。
+- [ ] AgentOS 自定义 sideagentd、SELinux 和 Binder 注册运行验证。
+- [ ] 固化 Ubuntu 24.04 ready 容器的依赖与 Dockerfile，并完成干净主机复现；当前现场镜像需保留。
 - [ ] 多用户：user start/stop/unlock 的 Session 与 lease 撤销语义。
 - [ ] Plugin 端到端：manifest 发现 → 启用 → 按需 bind → 握手 → tool 调用 → resource 注入 → binder death 撤销。
 - [ ] freezer 矩阵：§5 全部验证项在 freezer 开/关两种配置下通过。
