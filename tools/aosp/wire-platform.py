@@ -55,8 +55,14 @@ def main():
     if "#define AID_SIDEAGENT " not in content:
         if re.search(r"#define\s+\w+\s+1096\b", content):
             raise ValueError("AID 1096 is already allocated")
-        insert(aid_header, "#define AID_SIDEAGENT ",
-               "// Additions to this file must be made in AOSP",
+        # android-15.0.0_r34 carries this comment twice (for two reserved
+        # ranges), so anchor the platform AID immediately after the last
+        # allocated platform UID.  The small fixture used by the tests has
+        # the older single comment and remains supported as a fallback.
+        aid_needle = "#define AID_MMD 1095"
+        if content.count(aid_needle) != 1:
+            aid_needle = "// Additions to this file must be made in AOSP"
+        insert(aid_header, "#define AID_SIDEAGENT ", aid_needle,
                "#define AID_SIDEAGENT 1096 /* AgentOS daemon */\n")
 
     service_bp = "frameworks/base/services/core/Android.bp"
