@@ -52,6 +52,11 @@ class FakeRemote:
 
 
 class BackupArtifactsTest(unittest.TestCase):
+    def test_rsync_accepts_renamed_secluded_args_and_rejects_old_versions(self):
+        self.assertTrue(MODULE.check_rsync_help("--append-verify --secluded-args"))
+        self.assertTrue(MODULE.check_rsync_help("--append-verify --protect-args"))
+        self.assertFalse(MODULE.check_rsync_help("--append --protect-args"))
+
     def test_atomic_copy_publishes_checksum_and_index(self):
         with tempfile.TemporaryDirectory() as directory:
             directory = Path(directory)

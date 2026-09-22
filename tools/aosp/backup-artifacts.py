@@ -163,7 +163,8 @@ def safe_destination(root, key):
 
 
 def check_rsync_help(help_text):
-    return "--append-verify" in help_text and "--protect-args" in help_text
+    return "--append-verify" in help_text and any(
+        flag in help_text for flag in ("--protect-args", "--secluded-args"))
 
 
 def select_rsync(explicit=None):
