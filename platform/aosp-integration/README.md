@@ -1,39 +1,56 @@
 # AOSP integration
 
-这里记录将 AgentOS 接入 AOSP 的位置和约束。默认开发不构建系统镜像；`platform/checkout` 只在需要 Cuttlefish 验证时放置 AOSP `repo` checkout，并保持未跟踪。
+这里记录将 AgentOS 接入 AOSP 的位置和约束。源码构建基线固定为 **`android-15.0.0_r34`**，先验证 Cuttlefish，再处理 Pixel 8（`shiba`）。AOSP checkout、工具链缓存和镜像放在仓库外；只提交 overlay、接线/备份脚本和可重现的版本记录。
 
 ```text
-system/agent/                         sideagentd、协议、init 和 domain
+system/agent/                         系统契约与 Node 数据面参考实现
+platform/aosp-integration/overlay/    待集成的 native daemon、Java 控制面、AIDL、init 和 domain
 platform/framework/agent-manager/     AgentManagerService 设计
 platform/product/                     产品包、权限和 system app 配置
-platform/checkout/                    AOSP checkout（本地、不提交）
+tools/aosp/                           接线、备份及其测试
 ```
 
 所有 AOSP 侧改动（sideagentd 落地、SELinux、AgentManagerService、Plugin 权限、freezer 与 phantom process killer 调优、系统测试）以 [AOSP 变更全局 TODO](aosp-todo.md) 为唯一事实来源，按状态和验证证据维护。
 
-这些内容通过单独的手动平台 workflow 验证，不进入默认 PR CI。
+默认 PR CI 检查 overlay 结构与已有运行时契约，不构建 AOSP。完整平台构建和系统验证仍需单独执行，专用平台 workflow 待添加。
 
-## Bootstrap overlay
+## 当前证据（2026-09-22）
 
-`overlay/` 是第一阶段可复制到 AOSP checkout 的最小系统切片：
+- `62223a7` 已保存自动接线和真实测试 APK `AgentOsPluginProbe`；后续 `bfde761`、`1c163f3` 等提交补充了 Cuttlefish-only 接线、版本校验、仓库外备份及脚本测试。
+- 新主机的 SSH 指纹、两块数据盘挂载、CPU/内存、`/dev/kvm` 与主机 JDK 已记录。固定版本的 clang/Rust/build-tools 完整性、Soong 分析和源码构建仍需单独验证。
+- 官方 Cuttlefish **stock build `16373615`** 的 image zip 与 host package 已下载到本地并通过传输前后及本地 SHA-256 一致性校验。证据目录为仓库外的 `../.local/aosp-artifacts/2026-09-22-rebuild/fallback/`，其中 `index.json` 和 `SHA256SUMS` 记录校验结果。
+- stock Cuttlefish 启动尚未完成。本轮没有已完成的 AgentOS 自定义 Cuttlefish/Pixel 8 镜像，也没有 AgentOS 系统或真机测试结果。stock 包不包含本仓库 overlay，其 build ID 也不能代替 `android-15.0.0_r34` 源码构建证据。
 
-- versioned AIDL health API and Plugin endpoint bootstrap types;
-- native `sideagentd` that registers `agentos.sideagentd` and reports health;
-- init rc, dedicated domain/file/service labels and a Product-independent
-  `AgentManagerService` discovery skeleton;
-- manifest discovery on user/package lifecycle, per-user enablement and
-  `BIND_AUTO_CREATE` binding;
-- freezer verification invariants. The overlay intentionally does not grant a
-  broad freezer exemption before the target AOSP branch is measured.
+## Overlay 与自动接线
 
-Prepare a local checkout only after selecting the target branch:
+`overlay/` 已包含 stable AIDL v1、native `sideagentd` health Binder、init/SELinux 文件和 `AgentManagerService`。控制面实现了 manifest 发现、包身份校验、按用户保存启用状态、用户生命周期、绑定/握手、断连重试，以及 `cmd agentos` 和 `dumpsys agentos` 的基础诊断。代码存在不代表这些行为已在 Android 系统上验证。
+
+在完成所选项目同步并保存 checkout 状态后，从仓库根目录执行：
 
 ```bash
-AOSP_ROOT=/path/to/aosp ./tools/aosp/prepare-overlay.sh
+python3 tools/aosp/wire-platform.py /path/to/aosp
+python3 tools/aosp/wire-platform.py /path/to/aosp --apply
 ```
 
-The script copies source files (not documentation) into the checkout and
-refuses a dirty target or an existing conflicting file unless
-`ALLOW_DIRTY_AOSP=1` or `ALLOW_OVERWRITE_AOSP=1` is explicitly set. It does
-not sync AOSP, flash a device or modify the Git repository containing this
-project.
+默认 target 是 `cuttlefish`，不要求同步 Pixel 的 shusky 项目；Pixel 路线需显式 `--target pixel8`。脚本检查 manifest 默认 revision 及参与接线项目的 HEAD 是否对应固定 tag，复制 overlay，并修改 AID、产品包、SystemServer、Java 依赖、权限与平台 SELinux 接线。它不会拒绝所有工作区改动；先检查 dry-run 差异。旧文件保存在 **AOSP 根目录的同级** `agentos-wiring-backups/<timestamp>/`，避免 Soong 扫描备份中的重复模块。重复应用应无变更。
+
+`prepare-overlay.sh` 仍可用于仅复制 overlay，不执行平台接线。接线行为测试使用临时 Git fixture：`python3 tools/aosp/test_wire_platform.py`；它不能替代真实 AOSP 编译或启动验证。
+
+## 构建与备份顺序
+
+1. 只同步 Cuttlefish 所需项目，不执行 `repo sync -g all`。保存 `repo manifest -r`、工具链版本、磁盘记录和 patch；原始 `upstream-default.xml` 不能代替 resolved manifest。
+2. 应用接线后，先通过 Soong 分析，再构建 `aosp_cf_x86_64_only_phone-trunk_staging-userdebug`。Trusty 单独处理；90 分钟仍未进入有效编译时，转官方预构建镜像验证主机与 Cuttlefish 启动。
+3. 构建开始即在保留副本的本地电脑运行备份：
+
+   ```bash
+   python3 tools/aosp/backup-artifacts.py --watch \
+     --remote-out /mnt/aosp-out/aosp-out \
+     --evidence-root /mnt/aosp-out/evidence \
+     --evidence-root /mnt/aosp-out/logs \
+     --local-dir ../.local/aosp-artifacts/2026-09-22-rebuild/custom
+   ```
+
+   脚本用 `rsync --partial --append-verify` 获取镜像/包和指定证据目录，只有远端传输前后与本地 SHA-256 相符才发布已验证副本。它不负责生成 manifest、日志或 patch；构建流程必须先保存这些文件。stock 与自定义产物使用不同备份目录。
+4. 依次验证 Cuttlefish/ADB、`sideagentd`、`agentos`、Plugin 发现/启用/握手/禁用/删除用户、Binder death 和 freezer。停机前再执行 `--once`，检查本地文件、`index.json`、`SHA256SUMS`、日志和 manifest，并确认最新代码已推送。
+
+当前同步握手仍可能被不返回的 Plugin 耗尽两个工作线程；完整 MCP、tool/resource 调用、capability lease、前端迁移和 freezer 矩阵也未移植或验证。详细缺口以 [全局 TODO](aosp-todo.md) 为准，当前不能称为可刷机就绪。

@@ -9,29 +9,39 @@
 - AOSP 文件路径基于通用 AOSP 结构，checkout 后如与目标版本不符，修正路径而不是删除条目。
 - 本仓库不提交 AOSP 源码；所有 AOSP 修改以 patch 序列或本地分支形式存放在 `platform/checkout`（不跟踪），本文记录索引。
 
-当前基线：`platform/checkout` 尚未放置 AOSP checkout。已添加未编译的
-bootstrap overlay：`platform/aosp-integration/overlay/`，包含 sideagentd
-health Binder、Plugin manifest discovery/按需 bind 骨架和基础 SELinux/init
-文件；这些文件必须在目标 AOSP 分支上编译和运行后才能标为 `[x]`。
+当前基线：源码版本固定为 `android-15.0.0_r34`，但本轮新服务器上的 AOSP
+checkout 和构建结果不作为仓库内容保存。`platform/aosp-integration/overlay/`
+包含 sideagentd health Binder、stable AIDL v1、真实 `AgentOsPluginProbe`、
+Plugin manifest discovery/按需 bind 控制面和基础 SELinux/init 文件；
+`62223a7` 及后续提交还保存了 Cuttlefish-only/Pixel 8 target 接线脚本、
+checkout revision 校验、仓库外备份和 fixture tests。代码和 fixture test
+不是 Android 编译或启动证据。
+
+官方 stock Cuttlefish build `16373615` 的 image zip 与 host package 已在
+仓库外 `../.local/aosp-artifacts/2026-09-22-rebuild/fallback/` 完成 SHA-256
+校验并保存，`index.json` 与 `SHA256SUMS` 是当前证据；stock 包不含 AgentOS
+overlay，启动/ADB 尚未完成。本轮没有已完成的 AgentOS 自定义 Cuttlefish
+或 Pixel 8 镜像，也没有 AgentOS 真机测试，因此不能标为 Ready。
 
 ## 0. 前置：checkout 与构建环境
 
-- [ ] 选定目标 AOSP 版本与分支（Cuttlefish 可用、内核带 binder freezer 支持），记录版本号到本节。候选方案是 `android-latest-release` 的 Cuttlefish userdebug；尚未锁定 revision，Pixel 8 真机作为后续硬件目标。
-- [ ] `repo init` / `repo sync` 到 `platform/checkout`，保持未跟踪。
+- [x] 选定目标 AOSP 版本为 `android-15.0.0_r34`，并在接线脚本中校验 manifest 默认 revision 及参与接线项目的 tag commit；Pixel 8（shiba）作为显式后续 target。
+- [~] `repo init` / `repo sync` 与 checkout 证据在新服务器上已重新开始，但远端 checkout、resolved manifest 和 patch 仍需保存到本地证据目录；AOSP 全量源码不进入仓库。
 - [ ] Cuttlefish `userdebug` lunch target 能启动并 adb 连接。
-- [ ] 建立 patch 管理方式（`repo diff` 导出或本地 topic branch），并记录在本节。
+- [~] `tools/aosp/wire-platform.py` 负责按固定 tag 应用接线并把覆盖文件备份到 AOSP 根目录同级；构建前仍需导出 resolved manifest、repo diff/patch 和工具版本到本地证据目录。
+- [x] 主机验证记录已保存：两块 NVMe 挂载、96 vCPU、JDK 17、`/dev/kvm` 和磁盘状态见仓库外 `../.local/aosp-artifacts/2026-09-22-rebuild/fallback/evidence-0/environment.txt`；本地备份工具使用 `rsync --partial --append-verify` 和 SHA-256 双端校验。
 
 ## 1. sideagentd 进程落地
 
-- [~] init rc：overlay 已产出 `sideagentd.rc`（class、专用 user/group、SELinux label）；仍需在 checkout 中分配 AID、接入产品 makefile 并启动验证。
-- [ ] 专用 UID：在 `system/core/libcutils/include/private/android_filesystem_config.h`（或 AID 分配的目标机制）为 sideagentd 分配固定 AID；不是 root，不是 system。
-- [ ] `PRODUCT_PACKAGES` 加入 sideagentd 与系统前端（`platform/product/`）。
+- [~] init rc：overlay 已产出 `sideagentd.rc`，接线脚本会加入产品包、AID 1096 和对应平台文件；仍需目标 checkout 编译和启动验证。
+- [~] 专用 UID：接线脚本在 `system/core/libcutils/include/private/android_filesystem_config.h` 申请 AID 1096；仍需确认目标分支编译和运行时属主，不是 root/system。
+- [~] `PRODUCT_PACKAGES` 已由 Cuttlefish/Pixel 8 target 接线脚本加入 sideagentd；系统前端尚未实现为可安装产品组件。
 - [ ] 数据目录：`/data/agent/<user>/` 目录创建、属主与标签（配合 §2）。
-- [~] Binder 服务注册：overlay 已定义 `agentos.sideagentd` 和 `ISideagentd.getHealth()`；仍需目标 AOSP 编译、servicemanager 注册和重启验证。
+- [~] Binder 服务注册：overlay 已定义 `agentos.sideagentd` 和 `ISideagentd.getHealth()`；仍需目标 AOSP 编译、servicemanager 注册、重启和 health 查询验证。
 
 ## 2. SELinux
 
-- [~] `sideagentd` domain：overlay 已产出 domain、`file_contexts`、`service_contexts`；仍需接入目标 `system/sepolicy`、跑 neverallow 和记录 denial 结果。
+- [~] `sideagentd` domain：接线脚本会合并 domain、`file_contexts`、`service_contexts` 到目标 `system/sepolicy/private`；仍需 neverallow、启动和 denial 结果。
 - [ ] 数据目录标签：sideagentd 私有数据目录专用 label；显式禁止读取其他用户 app-private 目录。
 - [ ] Binder 规则：允许 `sideagentd ↔ untrusted_app`（及 priv_app）之间由 capability session 引出的 Binder 调用。
 - [ ] 反向约束：前端进程不得直接持有 Plugin endpoint binder；只有 system_server 和 sideagentd 可以。
@@ -39,17 +49,18 @@ health Binder、Plugin manifest discovery/按需 bind 骨架和基础 SELinux/in
 
 ## 3. AgentManagerService（system_server）
 
-- [~] 在 overlay 中新增 AgentManagerService bootstrap 骨架：PackageManager manifest discovery、per-user enablement、`BIND_AUTO_CREATE` bind 和 sideagentd health 读取；仍需接入 `SystemServer` 并用 stable AIDL 编译。
-- [ ] 版本化 AIDL + 结构化 Parcelable（替换迁移期 `command(name, payload)`）。
+- [~] overlay 已新增 AgentManagerService：PackageManager manifest discovery、包/UID/签名/版本校验、per-user enablement、`BIND_AUTO_CREATE` bind、握手、断连重试和 sideagentd health 读取；接线脚本会接入 `SystemServer` 和 stable AIDL Java 依赖，仍需编译和启动验证。
+- [~] 已保存版本化 stable AIDL v1 + 结构化 Parcelable；完整 Plugin 操作接口仍未完成。
 - [ ] sideagentd 生命周期监管：启动等待注册、Binder death 重连、状态恢复。
-- [ ] UserManager 生命周期：user start/stop/unlock 时启停用户级资源、撤销订阅与 lease。
-- [ ] Plugin 身份校验：PackageManager 包名/UID/签名/版本比对（契约 §5 校验顺序）。
-- [ ] per-user Plugin 启用状态持久化（契约 §3.2），设置项与默认禁用语义。
-- [~] overlay 已定义按需 `bindServiceAsUser` + `openPluginSession` 的发现/握手路径；capability session 移交 sideagentd、持久化启用状态和完整调用管道仍未完成。
+- [~] UserManager 生命周期：overlay 已处理 user start/stop/unlock 与删除用户时的 Plugin 清理；Session/lease 撤销仍未实现，待系统测试。
+- [~] Plugin 身份校验：overlay 已实现包名/UID/签名/版本比对；待安装、升级、签名变化和多用户测试。
+- [~] per-user Plugin 启用状态持久化：overlay 已写入 `/data/system/agentos/plugins.json`，默认禁用；设置页和重启验收待完成。
+- [~] overlay 已定义 `bindServiceAsUser` + `openPluginSession` 的发现/握手路径，并保存 stable AIDL v1；capability session 移交 sideagentd、descriptor v3、完整调用管道仍未完成。
+- [ ] 修复同步握手无法取消的问题：两个不返回的 Plugin 可耗尽两个握手工作线程；使用可隔离或异步的握手机制并验证后续 Plugin 可恢复。
 
 ## 4. Plugin 权限与产品配置
 
-- [ ] 定义 `BIND_AGENT_PLUGIN` 权限（`signature|privileged`），定稿最终权限字符串与 intent action（替换契约中的 `agentos.*` 占位符，回写契约 §3.1）。
+- [~] 接线脚本已定义 `com.example.agentos.permission.BIND_AGENT_PLUGIN`（`signature|privileged`）并保留 `agentos.intent.action.PLUGIN_ENDPOINT`；最终命名和产品权限 allowlist 仍待定稿。
 - [ ] Plugin endpoint 公共 AIDL：把契约 §5–§8 的逻辑操作（`openPluginSession`、`beginInvoke`、`beginReadResource`、`cancelInvoke`、`closePluginSession`、hostCallback、result sink）映射为 stable AIDL + Parcelable（oneway + callback，不用阻塞事务承载长调用），落在本仓库 `plugins/api` 替换迁移期 `describe()/invoke()` 接口；依赖上一条权限/action 定稿，语义以 daemon `plugin-broker.mjs` 参考实现和契约 §13 测试为准。
 - [ ] `privapp-permissions` allowlist：系统前端与需要的系统组件（`frameworks/base/data/etc/` 或产品目录）。
 - [ ] 系统签名前端的访问控制：只向系统签名前端暴露控制接口。
@@ -75,17 +86,17 @@ health Binder、Plugin manifest discovery/按需 bind 骨架和基础 SELinux/in
 
 ## 6. 诊断
 
-- [ ] `dumpsys agent`：健康状态、Session/Task 计数、sequence、错误分类（架构文档 §诊断）。
-- [ ] `dumpsys agent plugins`：per-user 启用状态、活跃 session、lease 计数、资源注入统计（契约 §11）；不输出内容本体与 credential。
-- [ ] `cmd agent health` / `cmd agent sessions --user` / `cmd agent tasks --user`。
+- [~] 已提供 `dumpsys agentos` 的 Plugin 列表和基础状态；Session/Task 计数、sequence、lease 与资源注入统计仍未完成。
+- [~] 已提供 `cmd agentos health|plugins|enable|disable` 基础命令；`cmd agent` 兼容命令及完整 sessions/tasks 诊断仍未完成。
 
 ## 7. 系统测试（Cuttlefish，M6）
 
-- [ ] sideagentd 启动、SELinux 无 denial、Binder 注册可见。
+- [~] 官方 stock Cuttlefish build `16373615` image/host 已本地 SHA-256 校验保存，但启动/ADB 尚未完成；AgentOS 自定义 sideagentd、SELinux 和 Binder 注册没有运行证据。
 - [ ] 多用户：user start/stop/unlock 的 Session 与 lease 撤销语义。
 - [ ] Plugin 端到端：manifest 发现 → 启用 → 按需 bind → 握手 → tool 调用 → resource 注入 → binder death 撤销。
 - [ ] freezer 矩阵：§5 全部验证项在 freezer 开/关两种配置下通过。
-- [ ] 平台镜像构建放手动 workflow，不进默认 PR CI。
+- [~] 平台镜像构建保持手动执行；备份工具和证据目录已保存，默认 PR CI 不构建 AOSP。
+- [ ] 在本地备份自定义镜像、校验、resolved manifest、patch 和日志后，才能销毁服务器或进入 Pixel 8 真机路线。
 
 ## 依赖关系
 

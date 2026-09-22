@@ -2,6 +2,8 @@
 
 这是从当前 Android 原型迁移到系统 Agent 的最小顺序。每一步都应能单独验证，默认不构建完整 AOSP 镜像。
 
+2026-09-22 重建基线：源码固定 `android-15.0.0_r34`。`62223a7` 及后续提交已保存 overlay、自动接线、probe 和备份脚本；这些代码尚未在本轮形成可运行的 AgentOS 镜像。新主机环境已记录，官方 stock Cuttlefish build `16373615` image/host 包已在仓库外 `../.local/aosp-artifacts/2026-09-22-rebuild/fallback/` 校验保存，但启动未完成。stock 包不含 AgentOS；当前没有 AgentOS 真机验证，不能称为刷机就绪。
+
 ## M0：仓库和契约
 
 - [x] 统一目录：前端、系统 Agent、平台接入、Plugin、库和工具。
@@ -15,16 +17,16 @@
 
 - [x] 添加独立的 Session Store、Session Scheduler 和 Worker 参考实现（无 Binder、无真实模型）。
 - [~] 添加最小 daemon 可执行文件和健康接口（AOSP bootstrap overlay 已提供，待目标分支编译）。
-- [~] 添加 init service 描述和独立 SELinux domain（overlay 已提供，待 AID、产品和 neverallow 验证）。
+- [~] 添加 init service 描述和独立 SELinux domain（overlay 和 AID/产品/平台策略接线已保存，待目标构建、neverallow 和启动验证）。
 - [~] 注册稳定 Binder 服务（`agentos.sideagentd` health service 已定义，待 AOSP service manager 验证）。
-- [ ] 提供 `dumpsys agent` 和 `cmd agent health`。
+- [~] 已实现 `dumpsys agentos` Plugin 列表及 `cmd agentos health|plugins|enable|disable` 基础诊断，待系统验证；Session/Task 诊断未实现。
 
 ## M2：AgentManagerService
 
-- [~] 在 overlay 中加入控制面服务骨架：manifest discovery、per-user enablement、按需 bind 和 health 查询；待接入 `SystemServer`。
+- [~] 控制面已实现 manifest discovery、按用户持久化启用状态、绑定/握手和 health 查询；自动 `SystemServer` 接线已保存，待编译与启动验证。
 - [ ] 处理 sideagentd 的 Binder death、重连和状态恢复。
-- [ ] 添加 user start/stop/unlock 生命周期。
-- [ ] 只向系统签名的前端暴露控制接口。
+- [~] 已实现 user start/stop/unlock、删除用户时清理 Plugin 记录和授予状态；Session/lease 生命周期及多用户系统测试待完成。
+- [~] 现有控制 Binder 只允许 root/system UID，userdebug shell 可用诊断命令；系统签名前端的访问机制与迁移待完成。
 
 ## M3：输出管道和存储
 
@@ -46,20 +48,26 @@
 
 - [x] daemon 参考实现 `PluginBroker`：descriptor v3 校验、启用状态、按需绑定/握手、invoke 与 resource/reminder 管道、lease 接线；契约 §13 reference tests 1–12 通过。
 
-- [ ] 由 system_server 校验 Plugin UID、签名和版本。
-- [~] manifest 发现、`BIND_AGENT_PLUGIN` 权限与 per-user 启用状态（bootstrap discovery skeleton 已提供，持久化待接入）。
-- [~] 按需 `BIND_AUTO_CREATE` 拉起/解冻与空闲 unbind；freezer 与 phantom process killer 验证及调优（平台验证项）。
-- [~] `openPluginSession` 握手、descriptor v3 校验与 policy 过滤（bootstrap endpoint AIDL 已定义，完整 capability seam 待接入）。
+- [~] system_server 已实现包名、UID、签名、版本校验，待系统测试。
+- [~] manifest 发现、`BIND_AGENT_PLUGIN` 权限接线与 per-user 启用状态持久化已实现；待安装、升级、禁用、删除用户及重启测试。
+- [~] `BIND_AUTO_CREATE` 绑定、禁用时 unbind 和断连重试已实现；目前启用即保持绑定，按调用需求绑定/空闲释放及 freezer、phantom process killer 测试待完成。
+- [~] stable AIDL v1 `openPluginSession` 和基础 descriptor 校验已实现；descriptor v3、policy 与完整 capability 仍未移植。
+- [ ] 修复同步握手无法取消的问题：两个不返回的 Plugin 可耗尽两个握手工作线程；使用可隔离或异步的握手机制并验证后续 Plugin 可恢复。
 - [ ] 将 Plugin capability 句柄传递给 sideagentd。
 - [ ] tool 调用管道：requestId 幂等、取消、deadline、幂等键与操作记录。
 - [ ] resource 读取与 system reminder 注入管道：turn boundary 拉取、预算与确定性截断、非重放诊断记录。
-- [ ] Plugin 进程死亡时撤销 capability。
+- [~] Plugin 断连会清理绑定与 session 并退避重试；完整 capability 撤销仍待移植与 Binder death 系统测试。
+- [ ] 将 MCP transport、tool 调用、resource 注入和模型运行时从参考实现移植到系统数据面，完成真实端到端验证。
 - [ ] 将本地 shell manifest 和推送注册限定为开发模式。
 
 ## M6：平台集成
 
 AOSP 侧改动以 [AOSP 变更全局 TODO](../platform/aosp-integration/aosp-todo.md) 为唯一事实来源。
 
-- [ ] 在 Cuttlefish userdebug 上编译和启动 sideagentd。
+- [x] 固定 `android-15.0.0_r34` 并保存 Cuttlefish-only 自动接线、真实 `AgentOsPluginProbe` 测试源码与接线 fixture tests（`62223a7`、`bfde761`、`1c163f3`）。
+- [x] 保存仓库外增量备份工具及校验记录机制（`bfde761`、`90bd0a1`、`941f125`）；运行中的构建仍需持续产出和备份证据。
+- [~] 官方 stock Cuttlefish build `16373615` image/host 本地校验已完成；启动和 ADB 尚未完成。
+- [ ] 在固定源码基线完成 Soong 分析、自定义 Cuttlefish userdebug 构建，并启动 sideagentd 与 `agentos` 服务。
 - [ ] 运行系统级 Binder、SELinux 和多用户测试。
 - [ ] 将平台镜像构建放到手动 workflow，不放进默认 PR CI。
+- [ ] 按全局 TODO 的销毁前检查确认自定义镜像、校验、resolved manifest、patch、日志均有本地副本且最新代码已推送，再推进 Pixel 8 真机路线。
