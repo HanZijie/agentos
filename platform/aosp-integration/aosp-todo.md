@@ -34,6 +34,7 @@ checkout revision 校验、仓库外备份和 fixture tests。代码和 fixture 
 - [x] stock Cuttlefish 上真实跨 App Plugin/MCP 原型测试通过（`NotesPluginCrossAppTest`，证据见 [host recovery record](cuttlefish-host.md)）；该结果不替代 AgentManagerService/sideagentd 验收。
 - [~] stock Cuttlefish 自然 freezer 探针已实现并实测 `NOT_OBSERVED`（40 秒内同一 Notes PID 未冻结）；当前绑定策略不能回答最终 system_server 活跃 session 豁免问题。
 - [ ] 固定 `android-15.0.0_r34` 自定义 Cuttlefish `userdebug` target 完成构建、启动和 ADB 连接；stock 的 CP2A 系统不能替代该验收。
+- [~] 诊断构建已在 `trunk_staging-userdebug` 上真实编译 `sideagentd` 与 `agentos_system_aidl-V1-java.jar`；证据和本地 SHA-256 位于仓库外 `../.local/aosp-artifacts/2026-09-22-rebuild/custom-diagnostic/`。本次使用 `ALLOW_MISSING_DEPENDENCIES=true`、`WITH_DEXPREOPT=false`、`DISABLE_STUB_VALIDATION=true` 及 checkout 临时兼容声明，**没有生成 system.img，不能视为完整镜像构建通过**。
 - [~] frameworks/base、Go、clang 的 archive/tree 核对已通过；`pdk,linux` 同步仍不完整，并带入了属于 `pdk` 的 Darwin 项目；需明确排除 Darwin，补齐 Rust/misc 等输入并保存 resolved manifest。
 - [~] `tools/aosp/wire-platform.py` 负责按固定 tag 应用接线并把覆盖文件备份到 AOSP 根目录同级；构建前仍需导出 resolved manifest、repo diff/patch 和工具版本到本地证据目录。
 - [x] 主机验证记录已保存：两块 NVMe 挂载、96 vCPU、JDK 17、`/dev/kvm` 和磁盘状态见仓库外 `../.local/aosp-artifacts/2026-09-22-rebuild/fallback/evidence-0/environment.txt`；本地备份工具使用 `rsync --partial --append-verify` 和 SHA-256 双端校验。
