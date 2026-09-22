@@ -23,8 +23,8 @@ Plugin/freezer 验证或 Pixel 8 镜像。
 | 证据目录 | 主机 `/mnt/aosp-out/evidence/fallback-boot` → 容器 `/evidence` |
 
 Ubuntu 24.04 容器用于满足 host package 的 glibc 依赖；它仍使用主机的 5.4 内核。
-上述 ready 镜像由现场安装依赖形成，仓库尚无对应 Dockerfile，**干净主机复现未验证**。
-恢复时需要保留该本地 Docker 镜像，后续仍须固化依赖和镜像构建步骤。两个官方归档的
+现场 ready 镜像曾在容器启动后补装依赖；现在仓库已保存锁定版本的 [host recovery recipe](cuttlefish-host.md)，并在独立容器中验证了官方 host package 的 QEMU 启动和 ADB 开机。**干净主机复现仍未验证**。
+恢复时仍应保留该本地 Docker 镜像；依赖和镜像构建步骤已固化到 host recovery recipe，但干净主机重建仍需单独验收。两个官方归档的
 SHA-256 在备份目录的 `SHA256SUMS` 中；不要混用其他 build 的 image 和 host package。
 
 ## 恢复与启动

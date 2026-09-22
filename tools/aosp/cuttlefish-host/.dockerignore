@@ -1,0 +1,4 @@
+*
+!Dockerfile
+!host-packages.lock
+!capability_query.py

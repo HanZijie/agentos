@@ -31,6 +31,8 @@ checkout revision 校验、仓库外备份和 fixture tests。代码和 fixture 
 - [x] 选定目标 AOSP 版本为 `android-15.0.0_r34`，并在接线脚本中校验 manifest 默认 revision 及参与接线项目的 tag commit；Pixel 8（shiba）作为显式后续 target。
 - [~] `repo init` / `repo sync` 与 checkout 证据在新服务器上已重新开始，但远端 checkout、resolved manifest 和 patch 仍需保存到本地证据目录；AOSP 全量源码不进入仓库。
 - [x] 官方 stock Cuttlefish build `16373615` 通过 QEMU 启动并连接 ADB（19:17 的 `adb-baseline.txt`，路径见上述 runbook）。
+- [x] stock Cuttlefish 上真实跨 App Plugin/MCP 原型测试通过（`NotesPluginCrossAppTest`，证据见 [host recovery record](cuttlefish-host.md)）；该结果不替代 AgentManagerService/sideagentd 验收。
+- [~] stock Cuttlefish 自然 freezer 探针已实现并实测 `NOT_OBSERVED`（40 秒内同一 Notes PID 未冻结）；当前绑定策略不能回答最终 system_server 活跃 session 豁免问题。
 - [ ] 固定 `android-15.0.0_r34` 自定义 Cuttlefish `userdebug` target 完成构建、启动和 ADB 连接；stock 的 CP2A 系统不能替代该验收。
 - [~] frameworks/base、Go、clang 的 archive/tree 核对已通过；`pdk,linux` 同步仍不完整，并带入了属于 `pdk` 的 Darwin 项目；需明确排除 Darwin，补齐 Rust/misc 等输入并保存 resolved manifest。
 - [~] `tools/aosp/wire-platform.py` 负责按固定 tag 应用接线并把覆盖文件备份到 AOSP 根目录同级；构建前仍需导出 resolved manifest、repo diff/patch 和工具版本到本地证据目录。
