@@ -55,15 +55,17 @@ def main():
     if "#define AID_SIDEAGENT " not in content:
         if re.search(r"#define\s+\w+\s+1096\b", content):
             raise ValueError("AID 1096 is already allocated")
-        # android-15.0.0_r34 carries this comment twice (for two reserved
-        # ranges), so anchor the platform AID immediately after the last
-        # allocated platform UID.  The small fixture used by the tests has
-        # the older single comment and remains supported as a fallback.
-        aid_needle = "#define AID_MMD 1095"
+        # Anchor immediately after the complete r34 platform UID declaration.
+        # Matching the full line prevents silently wiring a different branch
+        # whose AID 1095 declaration has changed or is only a substring match.
+        aid_needle = "#define AID_MMD 1095                 /* uid for memory management daemon */"
         if content.count(aid_needle) != 1:
-            aid_needle = "// Additions to this file must be made in AOSP"
-        insert(aid_header, "#define AID_SIDEAGENT ", aid_needle,
-               "#define AID_SIDEAGENT 1096 /* AgentOS daemon */\n")
+            raise ValueError("Expected exactly one android-15.0.0_r34 AID_MMD declaration")
+        changes[aid_header] = content.replace(
+            aid_needle,
+            aid_needle + "\n#define AID_SIDEAGENT 1096 /* AgentOS daemon */",
+            1,
+        )
 
     service_bp = "frameworks/base/services/core/Android.bp"
     content = read(service_bp).replace('"agentos_system_aidl-V1-java"',

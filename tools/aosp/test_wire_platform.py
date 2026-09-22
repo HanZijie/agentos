@@ -19,7 +19,12 @@ PROJECTS = ("system/core", "frameworks/base", "system/sepolicy",
             "device/google/cuttlefish")
 FIXTURE_FILES = {
     "system/core/libcutils/include/private/android_filesystem_config.h":
-        "#define AID_SYSTEM 1000\n// Additions to this file must be made in AOSP\n",
+        "#define AID_SYSTEM 1000\n"
+        "#define AID_MMD 1095                 /* uid for memory management daemon */\n"
+        "// Additions to this file must be made in AOSP, *not* in internal branches.\n"
+        "// You will also need to update expect_ids() in bionic/tests/grp_pwd_test.cpp.\n"
+        "// Additions to this file must be made in AOSP, *not* in internal branches.\n"
+        "// You will also need to update expect_ids() in bionic/tests/grp_pwd_test.cpp.\n",
     "frameworks/base/services/core/Android.bp":
         'java_library_static {\n    name: "services.core.unboosted",\n'
         '    static_libs: [\n        "existing-library",\n    ],\n}\n',
@@ -109,6 +114,10 @@ class WirePlatformTest(unittest.TestCase):
         self.assertIn('android:protectionLevel="signature|privileged"', manifest)
         self.assertIn("#define AID_SIDEAGENT 1096", (self.root /
                       "system/core/libcutils/include/private/android_filesystem_config.h").read_text())
+        aid = (self.root / "system/core/libcutils/include/private/android_filesystem_config.h").read_text()
+        self.assertEqual(aid.index("#define AID_SIDEAGENT 1096"),
+                         aid.index("#define AID_MMD 1095") +
+                         len("#define AID_MMD 1095                 /* uid for memory management daemon */\n"))
         for name in ("sideagentd.te", "file_contexts", "service_contexts"):
             expected = (OVERLAY / "system/agent/sepolicy" / name).read_text()
             actual = (self.root / "system/sepolicy/private" / name).read_text()
@@ -133,6 +142,16 @@ class WirePlatformTest(unittest.TestCase):
         result = self.wire("--apply")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("pinned to android-15.0.0_r34", result.stderr)
+        self.assertEqual(self.snapshot(), before)
+        self.assertFalse((self.parent / "agentos-wiring-backups").exists())
+
+    def test_non_r34_aid_declaration_rejects_before_any_mutation(self):
+        aid_path = self.root / "system/core/libcutils/include/private/android_filesystem_config.h"
+        aid_path.write_text(aid_path.read_text().replace("/* uid for memory management daemon */", "/* changed */"))
+        before = self.snapshot()
+        result = self.wire("--apply")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Expected exactly one android-15.0.0_r34 AID_MMD declaration", result.stderr)
         self.assertEqual(self.snapshot(), before)
         self.assertFalse((self.parent / "agentos-wiring-backups").exists())
 
