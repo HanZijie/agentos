@@ -5,6 +5,7 @@ import difflib
 from pathlib import Path
 import re
 import shutil
+import subprocess
 import time
 import xml.etree.ElementTree as ET
 
@@ -13,17 +14,26 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("aosp_root", type=Path)
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--target", choices=("cuttlefish", "pixel8"), default="cuttlefish")
     args = parser.parse_args()
     root = args.aosp_root.resolve()
     manifest = root / ".repo/manifests/default.xml"
     revision = ET.parse(manifest).getroot().find("default").get("revision")
     if revision != "refs/tags/android-15.0.0_r34":
         parser.error("This wiring is pinned to android-15.0.0_r34; review another branch first")
+    projects = ["system/core", "frameworks/base", "system/sepolicy",
+                "device/google/cuttlefish" if args.target == "cuttlefish" else "device/google/shusky"]
+    for project in projects:
+        def git_value(ref):
+            return subprocess.check_output(
+                ["git", "-C", str(root / project), "rev-parse", ref], text=True).strip()
+        if git_value("HEAD") != git_value(revision + "^{commit}"):
+            parser.error(f"{project} HEAD does not match {revision}")
     overlay = Path(__file__).resolve().parents[2] / "platform/aosp-integration/overlay"
     changes = {}
 
     def read(path):
-        return changes.get(path, (root / path).read_text())
+        return changes[path] if path in changes else (root / path).read_text()
 
     def insert(path, marker, needle, addition):
         text = read(path)
@@ -92,8 +102,9 @@ def main():
                 content = content.rstrip() + "\n" + line + "\n"
         changes[path] = content
 
-    for path in ("device/google/cuttlefish/shared/device.mk",
-                 "device/google/shusky/aosp_shiba.mk"):
+    product_paths = (["device/google/cuttlefish/shared/device.mk"] if args.target == "cuttlefish"
+                     else ["device/google/shusky/aosp_shiba.mk"])
+    for path in product_paths:
         content = read(path)
         for line in ("PRODUCT_SOONG_NAMESPACES += system/agent",
                      "PRODUCT_PACKAGES += sideagentd"):
@@ -115,7 +126,9 @@ def main():
                 print("".join(difflib.unified_diff(old.splitlines(True), content.splitlines(True),
                                                  fromfile=path, tofile=path)), end="")
     if args.apply:
-        backup = root / ".agentos-wiring-backups" / str(time.time_ns())
+        # Keep Android.bp backups outside the source tree: Soong discovers them
+        # recursively even below hidden directories, causing duplicate modules.
+        backup = root.parent / "agentos-wiring-backups" / str(time.time_ns())
         for path, content in changed.items():
             target = root / path
             if target.exists():
