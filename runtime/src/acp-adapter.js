@@ -293,4 +293,10 @@ export function startPiAcpStdio(options = {}) {
   return connection;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) startPiAcpStdio();
+// Keep the entry-point check compatible with both the repository's ESM tests
+// and the CommonJS bundle produced for an AOSP runtime image.  Import-meta
+// URL rewriting in a CommonJS bundle can otherwise evaluate to an undefined
+// file URL before the worker is even loaded.
+if (process.argv[1] && /(?:^|[\\/])acp-adapter\\.(?:m?js|cjs)$/.test(process.argv[1])) {
+  startPiAcpStdio();
+}
