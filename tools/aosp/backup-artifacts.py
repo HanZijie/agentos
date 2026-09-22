@@ -259,7 +259,9 @@ class Backup:
         partial.parent.mkdir(parents=True, exist_ok=True)
         source_record = partial.with_name(partial.name + ".source.json")
         saved = json.loads(source_record.read_text()) if source_record.exists() else {}
-        if partial.exists() and saved.get("sha256") != before["sha256"]:
+        if (partial.exists() and
+                (saved.get("sha256") != before["sha256"] or
+                 partial.stat().st_size > before["stat"]["size"])):
             partial.unlink()  # Different generation: append cannot repair a rewritten prefix.
         atomic_json(source_record, before)
         self.remote.copy(item["path"], partial)
