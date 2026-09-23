@@ -18,11 +18,8 @@
 
 package com.example.agentos;
 @VintfStability
-interface ISideagentd {
-  com.example.agentos.AgentHealth getHealth();
-  void registerPluginSession(in com.example.agentos.AgentPluginSession session);
-  oneway void unregisterPluginSession(String pluginSessionId, String reason);
-  oneway void beginInvoke(in com.example.agentos.AgentPluginInvokeRequest request, com.example.agentos.IAgentPluginResultSink sink);
-  oneway void beginReadResource(in com.example.agentos.AgentPluginResourceRequest request, com.example.agentos.IAgentPluginResultSink sink);
-  oneway void cancelInvoke(String pluginSessionId, String requestId);
+interface IAgentPluginHostCallback {
+  oneway void notifyResourcesChanged(String pluginSessionId, in String[] resourceNames);
+  oneway void notifyCapabilitiesChanged(String pluginSessionId);
+  oneway void requestClose(String pluginSessionId, String reasonCode);
 }

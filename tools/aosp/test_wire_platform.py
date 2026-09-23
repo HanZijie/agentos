@@ -105,7 +105,7 @@ class WirePlatformTest(unittest.TestCase):
         self.assertIn("PRODUCT_ARTIFACT_PATH_REQUIREMENT_ALLOWED_LIST += system/bin/sideagentd",
                       product)
         service_bp = (self.root / "frameworks/base/services/core/Android.bp").read_text()
-        self.assertIn('"//system/agent:agentos_system_aidl-V1-java"', service_bp)
+        self.assertIn('"//system/agent:agentos_system_aidl-V2-java"', service_bp)
         self.assertIn('"existing-library"', service_bp)
         server = (self.root / "frameworks/base/services/java/com/android/server/"
                   "SystemServer.java").read_text()

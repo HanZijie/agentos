@@ -33,9 +33,13 @@ import android.util.Slog;
 
 import com.android.server.SystemService;
 import com.example.agentos.AgentHealth;
+import com.example.agentos.AgentPluginCapabilities;
 import com.example.agentos.AgentPluginDescriptor;
+import com.example.agentos.AgentPluginHostInfo;
+import com.example.agentos.AgentPluginSession;
 import com.example.agentos.IAgentManager;
 import com.example.agentos.IAgentPluginEndpoint;
+import com.example.agentos.IAgentPluginHostCallback;
 import com.example.agentos.ISideagentd;
 
 import org.json.JSONArray;
@@ -322,13 +326,32 @@ public final class AgentManagerService extends SystemService {
                 try {
                     mHandshakes.execute(() -> {
                         AgentPluginDescriptor descriptor = null;
-                        try { descriptor = endpoint.openPluginSession(sessionId,
-                                record.userId, "agentos-aosp-bootstrap/1"); }
-                        catch (Exception ignored) { }
+                        boolean v2 = false;
+                        try {
+                            AgentPluginHostInfo hostInfo = new AgentPluginHostInfo();
+                            hostInfo.protocolVersions = new String[] {"plugin-injection/1"};
+                            hostInfo.hostVersion = "agentos-aosp-bootstrap/2";
+                            hostInfo.userId = record.userId;
+                            descriptor = endpoint.openPluginSessionV2(sessionId, hostInfo,
+                                    new IAgentPluginHostCallback.Stub() {
+                                        @Override public void notifyResourcesChanged(String id,
+                                                String[] names) { }
+                                        @Override public void notifyCapabilitiesChanged(String id) { }
+                                        @Override public void requestClose(String id, String reason) { }
+                                    });
+                            v2 = descriptor != null && descriptor.protocolVersion == 3;
+                        } catch (Exception ignored) { }
+                        if (!v2) {
+                            try { descriptor = endpoint.openPluginSession(sessionId,
+                                    record.userId, "agentos-aosp-bootstrap/1"); }
+                            catch (Exception ignored) { }
+                        }
                         final AgentPluginDescriptor response = descriptor;
+                        final boolean negotiatedV2 = v2;
                         mHandler.post(() -> {
                             if (record.connection != this || !sessionId.equals(record.sessionId)) return;
-                            if (response == null || response.protocolVersion != 1
+                            if (response == null || (!negotiatedV2 && response.protocolVersion != 1)
+                                    || (negotiatedV2 && response.protocolVersion != 3)
                                     || !record.pluginId.equals(response.pluginId)
                                     || !record.component.getPackageName().equals(response.packageName)
                                     || response.descriptorJson == null
@@ -337,6 +360,13 @@ public final class AgentManagerService extends SystemService {
                             }
                             mHandler.removeCallbacks(record.timeout);
                             record.timeout = null;
+                            if (!handoffToSideagentd(record, endpoint, response)) {
+                                fail(record, this, "sideagentd_handoff_failed"); return;
+                            }
+                            if (negotiatedV2) {
+                                try { endpoint.sessionGranted(sessionId, capabilities(response)); }
+                                catch (Exception e) { fail(record, this, "capability_grant_failed"); return; }
+                            }
                             record.state = "active";
                             record.lastError = "";
                             record.retryMs = 1000L;
@@ -376,6 +406,12 @@ public final class AgentManagerService extends SystemService {
         record.retry = null;
         // close is oneway. Do not wait for third-party acknowledgement in system_server.
         if (record.endpoint != null && !record.sessionId.isEmpty()) {
+            ISideagentd daemon = ISideagentd.Stub.asInterface(
+                    ServiceManager.checkService(SIDED_SERVICE));
+            if (daemon != null) {
+                try { daemon.unregisterPluginSession(record.sessionId, "revoked"); }
+                catch (Exception ignored) { }
+            }
             try { record.endpoint.closePluginSession(record.sessionId, "revoked"); }
             catch (Exception ignored) { }
         }
@@ -428,6 +464,50 @@ public final class AgentManagerService extends SystemService {
         health.protocolVersion = 1;
         health.state = "daemon_unavailable";
         return health;
+    }
+
+    /** Move the endpoint Binder and policy-filtered descriptor names out of system_server. */
+    private boolean handoffToSideagentd(PluginRecord record, IAgentPluginEndpoint endpoint,
+            AgentPluginDescriptor descriptor) {
+        ISideagentd daemon = ISideagentd.Stub.asInterface(
+                ServiceManager.checkService(SIDED_SERVICE));
+        if (daemon == null) return false;
+        try {
+            JSONObject raw = new JSONObject(descriptor.descriptorJson);
+            AgentPluginSession session = new AgentPluginSession();
+            session.pluginSessionId = record.sessionId;
+            session.userId = record.userId;
+            session.pluginId = record.pluginId;
+            session.packageName = record.component.getPackageName();
+            session.endpoint = endpoint;
+            session.grantedTools = names(raw.optJSONArray("tools"));
+            session.grantedResources = names(raw.optJSONArray("resources"));
+            daemon.registerPluginSession(session);
+            return true;
+        } catch (Exception e) {
+            Slog.w(TAG, "Plugin session handoff failed: " + record.pluginId, e);
+            return false;
+        }
+    }
+
+    private static AgentPluginCapabilities capabilities(AgentPluginDescriptor descriptor)
+            throws Exception {
+        JSONObject raw = new JSONObject(descriptor.descriptorJson);
+        AgentPluginCapabilities result = new AgentPluginCapabilities();
+        result.grantedTools = names(raw.optJSONArray("tools"));
+        result.grantedResources = names(raw.optJSONArray("resources"));
+        return result;
+    }
+
+    private static String[] names(JSONArray values) {
+        if (values == null) return new String[0];
+        ArrayList<String> result = new ArrayList<>();
+        for (int i = 0; i < values.length(); i++) {
+            JSONObject item = values.optJSONObject(i);
+            String name = item == null ? null : item.optString("name", "");
+            if (name != null && !name.isEmpty()) result.add(name);
+        }
+        return result.toArray(new String[0]);
     }
 
     private String pluginsJson(int userId) throws Exception {

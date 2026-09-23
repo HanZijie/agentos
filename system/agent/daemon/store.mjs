@@ -32,7 +32,36 @@ export class SessionStore {
       this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
         CREATE TABLE IF NOT EXISTS sessions(id TEXT PRIMARY KEY, body TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS events(session TEXT NOT NULL, seq INTEGER NOT NULL, body TEXT NOT NULL,
-          PRIMARY KEY(session, seq));`);
+          PRIMARY KEY(session, seq));
+        CREATE TABLE IF NOT EXISTS tool_operations(
+          operation_id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          session_id TEXT NOT NULL,
+          plugin_id TEXT NOT NULL,
+          capability TEXT NOT NULL,
+          idempotency_key TEXT NOT NULL,
+          args_hash TEXT NOT NULL,
+          request_id TEXT NOT NULL,
+          state TEXT NOT NULL,
+          response_json TEXT,
+          error_json TEXT,
+          unknown_reason TEXT,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          UNIQUE(user_id, session_id, plugin_id, capability, idempotency_key),
+          UNIQUE(request_id)
+        );
+        CREATE INDEX IF NOT EXISTS tool_operations_state_idx ON tool_operations(state);
+        CREATE INDEX IF NOT EXISTS tool_operations_session_idx ON tool_operations(session_id);`);
+      // A process can only open the database after the previous owner released
+      // its lock. A pending operation therefore has no live caller to finish
+      // it and must be fenced before this owner can accept new work. Keeping
+      // the record (rather than deleting it) prevents a restart from replaying
+      // an unknown external side effect.
+      this.db.prepare(`UPDATE tool_operations
+        SET state='unknown', error_json=?, unknown_reason='daemon_restart', updated_at=?
+        WHERE state='pending'`).run(JSON.stringify({ code: 'operation_unknown', retryable: false,
+          message: 'daemon restarted before the endpoint reported a terminal result' }), Date.now());
     } catch (error) { this.release(); throw error; }
   }
   acquire() {
@@ -98,6 +127,93 @@ export class SessionStore {
       tasks: s.tasks.map(task), recoveryRequired: s.tasks.some(t => t.state === 'unknown'),
       pauseReason: s.pauseReason, snapshotSequence: s.sequence, oldestRetainedSequence: this.oldest(id),
       updates: s.updates };
+  }
+
+  /**
+   * Durable idempotency fence for Plugin tools with external side effects.
+   * Operation rows intentionally live outside the Session event stream: a
+   * tool result is not a model message and must not alter replayable history.
+   */
+  getToolOperation({ userId, sessionId, pluginId, capability, idempotencyKey }) {
+    const row = this.db.prepare(`SELECT * FROM tool_operations
+      WHERE user_id=? AND session_id=? AND plugin_id=? AND capability=? AND idempotency_key=?`).get(
+      userId, sessionId, pluginId, capability, idempotencyKey);
+    return row ? this.#toolOperation(row) : null;
+  }
+
+  createToolOperation({ operationId = randomUUID(), userId, sessionId, pluginId, capability,
+    idempotencyKey, argsHash, requestId = randomUUID(), now = Date.now() }) {
+    check([userId, sessionId, pluginId, capability, idempotencyKey, argsHash, requestId]
+      .every(v => typeof v === 'string' && v.length > 0), 'invalid_params');
+    check(typeof operationId === 'string' && operationId.length > 0 && Number.isSafeInteger(now), 'invalid_params');
+    const existing = this.getToolOperation({ userId, sessionId, pluginId, capability, idempotencyKey });
+    if (existing) {
+      check(existing.argsHash === argsHash, 'idempotency_conflict');
+      return { operation: existing, created: false };
+    }
+    try {
+      this.db.prepare(`INSERT INTO tool_operations(
+        operation_id,user_id,session_id,plugin_id,capability,idempotency_key,args_hash,
+        request_id,state,response_json,error_json,unknown_reason,created_at,updated_at)
+        VALUES(?,?,?,?,?,?,?,?, 'pending', NULL, NULL, NULL, ?, ?)`)
+        .run(operationId, userId, sessionId, pluginId, capability, idempotencyKey, argsHash,
+          requestId, now, now);
+    } catch (error) {
+      // A concurrent owner may have inserted the same key between the lookup
+      // and INSERT. Resolve that race through the same idempotency check.
+      if (error.code !== 'SQLITE_CONSTRAINT_UNIQUE') throw error;
+      const raced = this.getToolOperation({ userId, sessionId, pluginId, capability, idempotencyKey });
+      check(raced, 'operation_conflict');
+      check(raced.argsHash === argsHash, 'idempotency_conflict');
+      return { operation: raced, created: false };
+    }
+    return { operation: this.getToolOperation({ userId, sessionId, pluginId, capability, idempotencyKey }), created: true };
+  }
+
+  updateToolOperation(operationId, { state, response = undefined, error = undefined,
+    unknownReason = undefined, now = Date.now() } = {}) {
+    check(typeof operationId === 'string' && operationId.length > 0, 'invalid_params');
+    check(['pending', 'succeeded', 'failed', 'unknown'].includes(state), 'invalid_params');
+    check(Number.isSafeInteger(now), 'invalid_params');
+    const current = this.db.prepare('SELECT * FROM tool_operations WHERE operation_id=?').get(operationId);
+    check(current, 'operation_not_found');
+    // Terminal records are immutable except for unknown -> known reconciliation
+    // when an already-dispatched endpoint result arrives late.
+    check(current.state === 'pending' || (current.state === 'unknown' && state !== 'pending'), 'operation_terminal');
+    const responseJson = response === undefined ? current.response_json : JSON.stringify(response);
+    const errorJson = error === undefined ? current.error_json : JSON.stringify(error);
+    const reason = unknownReason === undefined ? current.unknown_reason : unknownReason;
+    this.db.prepare(`UPDATE tool_operations SET state=?, response_json=?, error_json=?,
+      unknown_reason=?, updated_at=? WHERE operation_id=?`).run(
+      state, responseJson, errorJson, reason, now, operationId);
+    return this.getToolOperationById(operationId);
+  }
+
+  getToolOperationById(operationId) {
+    const row = this.db.prepare('SELECT * FROM tool_operations WHERE operation_id=?').get(operationId);
+    return row ? this.#toolOperation(row) : null;
+  }
+
+  listToolOperations({ sessionId = null, state = null } = {}) {
+    const rows = sessionId === null && state === null
+      ? this.db.prepare('SELECT * FROM tool_operations ORDER BY created_at, operation_id').all()
+      : sessionId !== null && state !== null
+        ? this.db.prepare('SELECT * FROM tool_operations WHERE session_id=? AND state=? ORDER BY created_at, operation_id').all(sessionId, state)
+        : sessionId !== null
+          ? this.db.prepare('SELECT * FROM tool_operations WHERE session_id=? ORDER BY created_at, operation_id').all(sessionId)
+          : this.db.prepare('SELECT * FROM tool_operations WHERE state=? ORDER BY created_at, operation_id').all(state);
+    return rows.map(row => this.#toolOperation(row));
+  }
+
+  #toolOperation(row) {
+    const parse = value => value === null || value === undefined ? null : JSON.parse(value);
+    return {
+      operationId: row.operation_id, userId: row.user_id, sessionId: row.session_id,
+      pluginId: row.plugin_id, capability: row.capability, idempotencyKey: row.idempotency_key,
+      argsHash: row.args_hash, requestId: row.request_id, state: row.state,
+      response: parse(row.response_json), error: parse(row.error_json),
+      unknownReason: row.unknown_reason, createdAt: row.created_at, updatedAt: row.updated_at,
+    };
   }
   subscribe(id, after = '0', { maxBuffer = 256 } = {}) {
     check(Number.isSafeInteger(maxBuffer) && maxBuffer > 0, 'invalid_config');

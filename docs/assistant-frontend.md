@@ -36,3 +36,18 @@ verified on the target device or emulator configuration.
   prompt. `supportsAssist` remains declared for the future assist-data path,
   but the frontend currently shows a neutral ready state instead of implying
   that it has read the current page.
+
+## Deployment checkpoint (2026-09-23)
+
+The next validation step keeps `frontends/agenriod` as an APK installed outside
+the AOSP image. On the target device, verify that Agenriod can be selected as
+the default digital assistant and that the configured assistant gesture opens
+the voice session. A long press of the power button is valid evidence only if
+that device maps the gesture to the default assistant.
+
+This is a validation checkpoint, not the final system-image decision. If the
+frontend must ship inside the image, follow-up coding is required for the AOSP
+product package, signing and privileged permissions, default-assistant
+configuration, and device gesture configuration. The frontend also still has
+to migrate from the app-private `AgentService`/`AgentClient` path to
+`AgentManagerService` as described in the M4 roadmap.

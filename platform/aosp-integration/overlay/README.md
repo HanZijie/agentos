@@ -7,7 +7,10 @@ checkout revision checks, external backups and wiring tests.
 
 The first slice provides:
 
-- a versioned health AIDL and native `sideagentd` Binder service;
+- a versioned health and Plugin-session AIDL with native `sideagentd` Binder service;
+- stable AIDL v2 Plugin endpoint protocol (`agentos_system_aidl-V2`) with
+  structured handshake, capability grant, asynchronous tool/resource request,
+  typed terminal result/error, cancellation, and host callback boundaries;
 - init and SELinux bootstrap files;
 - a control plane that discovers Plugin endpoint services from the manifest,
   checks package/UID/signer/version identity, persists per-user grants, handles
@@ -18,6 +21,33 @@ The first slice provides:
 - the real `AgentOsPluginProbe` test APK for discovery, binding, handshake and
   process-lifecycle checks; it has no model, MCP or tool/resource pipeline;
 - explicit freezer verification invariants without a broad exemption.
+
+## Plugin endpoint protocol boundary
+
+`agentos_system_aidl` version 1 remains frozen for the discovery probe and
+existing control-plane clients. Version 2 appends the data-plane boundary
+without changing the version 1 transaction numbers:
+
+- `openPluginSessionV2` negotiates `AgentPluginHostInfo` and receives an
+  `IAgentPluginHostCallback` binder;
+- `sessionGranted` delivers the immutable per-session tool/resource allowlist;
+- `beginInvoke` and `beginReadResource` are `oneway` and carry structured
+  request Parcelables plus an `IAgentPluginResultSink` callback;
+- `cancelInvoke` and `closePluginSession` are best-effort `oneway` controls;
+- host callbacks report resource changes, capability changes, and endpoint
+  close requests.
+- `ISideagentd` V2 receives `AgentPluginSession` from `AgentManagerService`,
+  retains the endpoint Binder, and exposes matching invoke/resource/cancel
+  calls to the system data plane.
+
+This protocol and the native session router are validated with the local SDK
+AIDL Java/NDK compiler and V1→V2 API checks. A full AOSP/Soong build is still
+pending. `AgentManagerService` now hands the endpoint Binder and granted names
+to `sideagentd`; native `sideagentd` keeps the session, checks the granted tool
+or resource name, and forwards asynchronous calls. Plugin endpoint
+implementations still need to adopt V2, and attachment/PFD transport, lease
+enforcement, deadline cancellation, Binder-death cleanup, and durable
+side-effect records remain follow-up work in the Android daemon.
 
 From the AgentOS repository root, preview and apply the complete wiring:
 

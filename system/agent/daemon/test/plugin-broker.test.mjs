@@ -160,6 +160,58 @@ test('6: external tool requires an idempotency key and is never auto-replayed', 
   assert.deepEqual(h.endpoint.cancels, [h.endpoint.invokes[0].requestId]);
 });
 
+test('6a: external operation records persist, deduplicate concurrent calls, and cache terminal results', async t => {
+  const store = new SessionStore(':memory:');
+  let clock = 1000;
+  const broker = new PluginBroker({ store, now: () => clock, validateLease: () => true });
+  t.after(async () => { await broker.shutdown(); store.close(); });
+  const h = new FakeEndpoint(desc('com.ex.notes', { tools: [tool('w1', 'external')] }));
+  broker.installPackage({ packageName: 'com.ex.notes', endpointFactory: () => ({
+    endpoint: h, linkToDeath: () => {}, unbind: () => {},
+  }) });
+  broker.setEnabled('u', 'com.ex.notes', true);
+  const request = { userId: 'u', sessionId: 's', leaseId: 'l1', capability: 'com.ex.notes/w1',
+    argsJson: '{"value":1}', idempotencyKey: 'operation-1', deadlineEpochMs: clock + 100 };
+  const one = broker.invokeTool(request);
+  await flush();
+  const two = broker.invokeTool(request);
+  await flush();
+  assert.equal(h.invokes.length, 1);
+  assert.equal(store.listToolOperations()[0].state, 'pending');
+  h.deliver(h.invokes[0].requestId, { status: 'ok', resultJson: '{"ok":true}' });
+  assert.deepEqual(await one, await two);
+  assert.equal(store.listToolOperations()[0].state, 'succeeded');
+  const cached = await broker.invokeTool(request);
+  assert.deepEqual(cached, { status: 'ok', resultJson: '{"ok":true}', attachments: [], truncated: false });
+  assert.equal(h.invokes.length, 1);
+  await assert.rejects(broker.invokeTool({ ...request, argsJson: '{"value":2}' }), { code: 'idempotency_conflict' });
+});
+
+test('6b: an unconfirmed external operation is persisted as unknown and cannot replay', async t => {
+  const store = new SessionStore(':memory:');
+  let clock = 1000;
+  const broker = new PluginBroker({ store, now: () => clock, validateLease: () => true,
+    config: { resourceReadTimeoutMs: 20 } });
+  t.after(async () => { await broker.shutdown(); store.close(); });
+  const h = new FakeEndpoint(desc('com.ex.notes', { tools: [tool('w1', 'external')] }));
+  broker.installPackage({ packageName: 'com.ex.notes', endpointFactory: () => ({
+    endpoint: h, linkToDeath: () => {}, unbind: () => {},
+  }) });
+  broker.setEnabled('u', 'com.ex.notes', true);
+  const request = { userId: 'u', sessionId: 's', leaseId: 'l1', capability: 'com.ex.notes/w1',
+    argsJson: '{}', idempotencyKey: 'operation-unknown', deadlineEpochMs: clock + 10 };
+  const pending = broker.invokeTool(request);
+  await flush();
+  clock += 11; broker.sweep();
+  assert.equal((await pending).error.code, 'timeout');
+  const record = store.listToolOperations()[0];
+  assert.equal(record.state, 'unknown');
+  assert.equal(record.unknownReason, 'deadline');
+  const retry = await broker.invokeTool({ ...request, deadlineEpochMs: clock + 100 });
+  assert.equal(retry.error.code, 'operation_unknown');
+  assert.equal(h.invokes.length, 1);
+});
+
 test('7: deadline sweep cancels the call and late results are discarded', async t => {
   const f = fixture(t);
   const h = f.install('com.ex.notes', desc('com.ex.notes', { tools: [tool('t1')] }));

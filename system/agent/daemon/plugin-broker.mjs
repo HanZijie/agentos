@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { check } from './errors.mjs';
 
 // Reference implementation of Plugin Injection Contract v1
@@ -63,9 +63,10 @@ export function validateDescriptor(raw, { packageName, config }) {
  */
 export class PluginBroker {
   constructor({ policy = () => true, validateLease = () => false, onSessionRevoked = () => {},
-    hasActiveLeases = () => false, now = Date.now, config = {} } = {}) {
+    hasActiveLeases = () => false, now = Date.now, config = {}, store = null } = {}) {
     this.policy = policy; this.validateLease = validateLease; this.now = now;
     this.onSessionRevoked = onSessionRevoked; this.hasActiveLeases = hasActiveLeases;
+    this.store = store;
     this.config = { ...defaults, ...config };
     for (const [k, v] of Object.entries(this.config)) check(Number.isSafeInteger(v) && v > 0, 'invalid_config', k);
     this.packages = new Map();   // packageName -> {uid, signature, version, protectedByBindPermission, hasManifestAnchor, endpointFactory}
@@ -75,6 +76,8 @@ export class PluginBroker {
     this.handshakes = new Map(); // `${userId}/${pluginId}` -> Promise
     this.pending = new Set();    // deferred waits, settled by sweep() on deadline
     this.diag = new Map();       // pluginId -> counters
+    this.operations = new Map(); // process-local fallback when no SessionStore is supplied
+    this.liveOperations = new Map(); // operationId -> { operation, promise }
   }
   counters(pluginId) {
     let d = this.diag.get(pluginId);
@@ -107,7 +110,7 @@ export class PluginBroker {
   // One deferred wait per outstanding call; sweep() settles expired waits so
   // tests and the daemon drive time explicitly (same style as SessionScheduler).
   defer(deadline, pluginId, kind) {
-    const d = { deadline, pluginId, kind, settled: false };
+    const d = { deadline, pluginId, kind, settled: false, expired: false };
     d.promise = new Promise((resolve, reject) => {
       d.resolve = v => { if (!d.settled) { d.settled = true; this.pending.delete(d); resolve(v); } };
       d.reject = e => { if (!d.settled) { d.settled = true; this.pending.delete(d); reject(e); } };
@@ -119,6 +122,7 @@ export class PluginBroker {
     const now = this.now();
     for (const d of [...this.pending]) if (d.deadline <= now) {
       this.error(d.pluginId, 'timeout');
+      d.expired = true;
       d.kind === 'handshake' ? d.reject(Object.assign(new Error('handshake_timeout'), { code: 'handshake_timeout' }))
         : d.resolve({ status: 'error', error: { code: 'timeout', message: 'deadline exceeded', retryable: false } });
     }
@@ -230,7 +234,7 @@ export class PluginBroker {
       },
     };
   }
-  async call(kind, { userId, sessionId, leaseId, capability, deadlineEpochMs }, dispatch) {
+  async prepareCall(kind, { userId, sessionId, leaseId, capability, deadlineEpochMs }) {
     const { pluginId, name } = this.split(capability);
     check(Number.isSafeInteger(deadlineEpochMs) && deadlineEpochMs > this.now(), 'invalid_request');
     await this.ensureSession(userId, pluginId);
@@ -240,29 +244,116 @@ export class PluginBroker {
     check(declared, kind === 'tool' ? 'unknown_tool' : 'unknown_resource');
     check(this.validateLease({ leaseId, sessionId, pluginSessionId: session.pluginSessionId, capability }) === true, 'not_entitled');
     session.lastUsed = this.now();
-    const requestId = randomUUID();
+    return { pluginId, name, session, declared };
+  }
+  async call(kind, { userId, sessionId, leaseId, capability, deadlineEpochMs }, dispatch,
+    { prepared = null, requestId = randomUUID(), operation = null } = {}) {
+    const selected = prepared ?? await this.prepareCall(kind, { userId, sessionId, leaseId, capability, deadlineEpochMs });
+    const { pluginId, session, declared } = selected;
     const wait = this.defer(deadlineEpochMs, pluginId, kind);
     session.inflight.set(requestId, wait);
     try { dispatch(session, declared, requestId, this.sink(session, requestId, wait)); }
     catch (e) {
-      if (e?.code) { session.inflight.delete(requestId); wait.reject(e); } // host-side rejection, not an endpoint failure
-      else wait.resolve({ status: 'error', error: { code: 'unavailable', message: 'endpoint dispatch failed', retryable: true } });
+      if (e?.code) {
+        session.inflight.delete(requestId);
+        if (operation) this.finishOperation(operation, { status: 'error', error: {
+          code: e.code, message: String(e.message ?? e.code), retryable: false,
+        } });
+        wait.reject(e); // host-side rejection, not an endpoint failure
+      } else wait.resolve({ status: 'error', error: { code: 'unavailable', message: 'endpoint dispatch failed', retryable: true } });
     }
     const result = await wait.promise;
     session.inflight.delete(requestId);
     if (result.status === 'error' && result.error.code === 'timeout' && session.state === 'active') {
       try { session.endpoint.cancelInvoke(session.pluginSessionId, requestId); } catch { /* best effort */ }
     }
+    if (operation) this.finishOperation(operation, result, wait.expired ? 'deadline' : null);
     return result;
+  }
+
+  operationHash(argsJson) { return createHash('sha256').update(argsJson).digest('hex'); }
+  operationScope({ userId, sessionId, pluginId, capability, idempotencyKey }) {
+    return [userId, sessionId, pluginId, capability, idempotencyKey].join('\u0000');
+  }
+  operationRecord({ userId, sessionId, pluginId, capability, idempotencyKey, argsJson, requestId }) {
+    const argsHash = this.operationHash(argsJson);
+    const scope = this.operationScope({ userId, sessionId, pluginId, capability, idempotencyKey });
+    if (this.store) return this.store.createToolOperation({ userId, sessionId, pluginId, capability,
+      idempotencyKey, argsHash, requestId, now: this.now() });
+    const existing = this.operations.get(scope);
+    if (existing) {
+      check(existing.argsHash === argsHash, 'idempotency_conflict');
+      return { operation: existing, created: false };
+    }
+    const operation = { operationId: randomUUID(), userId, sessionId, pluginId, capability,
+      idempotencyKey, argsHash, requestId, state: 'pending', response: null, error: null,
+      unknownReason: null, createdAt: this.now(), updatedAt: this.now() };
+    this.operations.set(scope, operation);
+    return { operation, created: true };
+  }
+  operationById(operation) {
+    if (this.store) return this.store.getToolOperationById(operation.operationId) ?? operation;
+    return operation;
+  }
+  finishOperation(operation, result, unknownReason = null) {
+    const state = unknownReason ? 'unknown' : result?.status === 'ok' ? 'succeeded' : 'failed';
+    const error = unknownReason
+      ? { code: 'operation_unknown', message: `external operation outcome is unknown (${unknownReason})`, retryable: false }
+      : result?.error ?? null;
+    if (this.store) {
+      try { return this.store.updateToolOperation(operation.operationId, {
+        state, response: unknownReason ? undefined : result, error, unknownReason, now: this.now(),
+      }); } catch (e) {
+        // A result can race a restart/reconciliation. The durable row remains
+        // the source of truth; never turn a successful endpoint response into
+        // a second dispatch because a bookkeeping update lost that race.
+        if (e?.code !== 'operation_terminal') throw e;
+        return this.store.getToolOperationById(operation.operationId);
+      }
+    }
+    if (operation.state === 'unknown' && state === 'unknown') return operation;
+    operation.state = state; operation.response = unknownReason ? operation.response : result;
+    operation.error = error; operation.unknownReason = unknownReason; operation.updatedAt = this.now();
+    return operation;
+  }
+  operationResult(operation) {
+    const current = this.operationById(operation);
+    if (current.state === 'unknown') return { status: 'error', error: {
+      code: 'operation_unknown', message: 'external operation outcome is unknown; reconcile before retrying',
+      retryable: false, dataJson: JSON.stringify({ operationId: current.operationId }),
+    } };
+    return current.response ?? { status: 'error', error: current.error ?? {
+      code: 'operation_unknown', message: 'operation has no terminal response', retryable: false,
+    } };
   }
   async invokeTool({ userId, sessionId, leaseId, capability, argsJson = '{}', idempotencyKey = null, deadlineEpochMs }) {
     check(str(argsJson) && bytes(argsJson) <= this.config.inlinePayloadMaxBytes, 'invalid_request');
-    return this.call('tool', { userId, sessionId, leaseId, capability, deadlineEpochMs }, (session, tool, requestId, sink) => {
-      check(tool.sideEffects === 'none' || str(idempotencyKey), 'invalid_request', 'external tool requires idempotencyKey');
-      this.counters(session.pluginId).invokes += 1;
-      session.endpoint.beginInvoke(session.pluginSessionId, leaseId, requestId, tool.name, argsJson,
-        idempotencyKey, deadlineEpochMs, sink);
-    });
+    const prepared = await this.prepareCall('tool', { userId, sessionId, leaseId, capability, deadlineEpochMs });
+    const { pluginId, name } = this.split(capability);
+    const tool = prepared.declared;
+    check(tool.sideEffects === 'none' || str(idempotencyKey), 'invalid_request', 'external tool requires idempotencyKey');
+    const requestId = randomUUID();
+    const recorded = tool.sideEffects === 'external'
+      ? this.operationRecord({ userId, sessionId, pluginId, capability, idempotencyKey, argsJson, requestId }) : null;
+    const operation = recorded?.operation ?? null;
+    if (operation) {
+      const current = this.operationById(operation);
+      if (current.state !== 'pending') return this.operationResult(current);
+      const live = this.liveOperations.get(current.operationId);
+      if (live) return live.promise;
+      // A pending row without a live waiter can only come from an older owner.
+      // SessionStore normally fences it on open; keep the fallback conservative.
+      if (!recorded.created) return this.operationResult(this.finishOperation(current, null, 'stale_pending'));
+    }
+    const promise = this.call('tool', { userId, sessionId, leaseId, capability, deadlineEpochMs },
+      (session, declared, reqId, sink) => {
+        this.counters(session.pluginId).invokes += 1;
+        session.endpoint.beginInvoke(session.pluginSessionId, leaseId, reqId, declared.name, argsJson,
+          idempotencyKey, deadlineEpochMs, sink);
+      }, { prepared, requestId, operation });
+    if (operation) this.liveOperations.set(operation.operationId, { operation, promise });
+    try { return await promise; }
+    finally { if (operation && this.liveOperations.get(operation.operationId)?.promise === promise) this.liveOperations.delete(operation.operationId); }
   }
 
   // Turn-boundary assembly (contract §8). Returns reminder blocks for the next
@@ -325,5 +416,8 @@ export class PluginBroker {
     };
     return { plugins };
   }
-  async shutdown() { for (const s of [...this.sessions.values()]) this.close(s, 'daemon_shutdown'); }
+  async shutdown() {
+    for (const { operation } of this.liveOperations.values()) this.finishOperation(operation, null, 'daemon_shutdown');
+    for (const s of [...this.sessions.values()]) this.close(s, 'daemon_shutdown');
+  }
 }

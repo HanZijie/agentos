@@ -46,9 +46,12 @@ Pixel 8 真机仍未刷写，因此不能把整条真机路线标为 Ready。
 
 - [x] init rc：`sideagentd.rc` 已进入镜像并启动；运行时服务进程属主为 `sideagent` UID 1096。
 - [x] 专用 UID：Cuttlefish 中 `ps` 显示 `sideagent 1096 ... sideagentd`，不是 root/system。
-- [~] `PRODUCT_PACKAGES` 已由 Cuttlefish/Pixel 8 target 接线脚本加入 sideagentd；系统前端尚未实现为可安装产品组件。
+- [~] `PRODUCT_PACKAGES` 已由 Cuttlefish/Pixel 8 target 接线脚本加入 sideagentd；系统前端尚未实现为可安装产品组件。当前检查点先保留镜像外 APK，用于目标设备默认 Assistant 与电源键手势验证；镜像内置前端仍未开始接线。
 - [ ] 数据目录：`/data/agent/<user>/` 目录创建、属主与标签（配合 §2）。
 - [x] Binder 服务注册：`service list` 同时出现 `agentos` 与 `agentos.sideagentd`，`cmd agentos health` 返回 `state=ready`。
+- [~] native `sideagentd` 已增加 V2 Plugin session 注册、granted tool/resource
+  校验、异步 endpoint 转发和 cancel 骨架；Soong/设备编译与 Binder death
+  恢复仍待验证。
 - [ ] Jev secret 注入：为迁移后的 sideagentd 设计受 SELinux/UID 保护的运行时 secret 文件或 SecretStore；不能把用户 API key 写入 Git、通用镜像或诊断输出。当前 overlay 仍只有 health service，未宣称已支持 Session 选择。
 
 ## 2. SELinux
@@ -62,18 +65,29 @@ Pixel 8 真机仍未刷写，因此不能把整条真机路线标为 Ready。
 ## 3. AgentManagerService（system_server）
 
 - [x] AgentManagerService 已编译并在 system_server 中运行；`cmd agentos health` 走真实 system_server → sideagentd Binder 链路返回 `ready`。
-- [x] stable AIDL v1 与结构化 Parcelable 已随镜像编译并安装；完整 Plugin 操作接口仍未完成。
+- [x] stable AIDL v1 与结构化 Parcelable 已随镜像编译并安装；V2 Plugin
+  endpoint 协议骨架已加入并通过 API 兼容性检查，V1 生成物保持可用。
 - [ ] sideagentd 生命周期监管：启动等待注册、Binder death 重连、状态恢复。
 - [~] UserManager 生命周期：overlay 已处理 user start/stop/unlock 与删除用户时的 Plugin 清理；Session/lease 撤销仍未实现，待系统测试。
 - [x] Plugin 身份校验和 manifest discovery 已通过内置 `com.example.agentos.probe`：发现后默认 disabled，`cmd agentos enable` 后状态为 `active`，日志收到 `AgentOsProbe: open`。
 - [~] per-user Plugin 启用状态持久化：本轮验证了 user 0 的启用和运行状态；重启/升级/多用户覆盖仍待完成。
 - [x] `bindServiceAsUser` + `openPluginSession` 发现/握手路径已在 Cuttlefish 实例通过；capability session 移交 sideagentd、descriptor v3、完整调用管道仍未完成。
+- [~] `AgentManagerService` 已在 V2 AIDL 生成边界上注册/撤销
+  `AgentPluginSession`，native `sideagentd` 已有 session 保存与
+  invoke/resource/cancel 路由；实际镜像编译、Binder death 清理和端到端
+  invoke 仍待验证。
 - [ ] 修复同步握手无法取消的问题：两个不返回的 Plugin 可耗尽两个握手工作线程；使用可隔离或异步的握手机制并验证后续 Plugin 可恢复。
 
 ## 4. Plugin 权限与产品配置
 
 - [~] 接线脚本已定义 `com.example.agentos.permission.BIND_AGENT_PLUGIN`（`signature|privileged`）并保留 `agentos.intent.action.PLUGIN_ENDPOINT`；最终命名和产品权限 allowlist 仍待定稿。
-- [ ] Plugin endpoint 公共 AIDL：把契约 §5–§8 的逻辑操作（`openPluginSession`、`beginInvoke`、`beginReadResource`、`cancelInvoke`、`closePluginSession`、hostCallback、result sink）映射为 stable AIDL + Parcelable（oneway + callback，不用阻塞事务承载长调用），落在本仓库 `plugins/api` 替换迁移期 `describe()/invoke()` 接口；依赖上一条权限/action 定稿，语义以 daemon `plugin-broker.mjs` 参考实现和契约 §13 测试为准。
+- [~] Plugin endpoint 公共 AIDL：`agentos_system_aidl` V2 已把契约 §5–§8
+  的握手、`sessionGranted`、`beginInvoke`、`beginReadResource`、
+  `cancelInvoke`、`closePluginSession`、host callback 和 result sink 映射为
+  stable AIDL + Parcelable，并保留冻结 V1。当前只完成可编译协议边界；
+  system_server → sideagentd capability session handoff 的 Java/native
+  骨架已接通；Soong/设备编译验证、lease/deadline 校验、PFD attachment、
+  Exactly-once 操作记录和 Plugin 端实现仍待接线。
 - [ ] `privapp-permissions` allowlist：系统前端与需要的系统组件（`frameworks/base/data/etc/` 或产品目录）。
 - [ ] 系统签名前端的访问控制：只向系统签名前端暴露控制接口。
 - [ ] 设置页入口：Plugin 列表（manifest 锚点发现 + meta-data 摘要）与 per-user 启用开关。

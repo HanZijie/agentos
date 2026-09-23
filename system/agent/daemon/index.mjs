@@ -44,6 +44,7 @@ export function createPluginBroker(scheduler, store, options = {}) {
   const now = options.now ?? Date.now;
   return new PluginBroker({
     ...options,
+    store,
     now,
     validateLease: ({ leaseId, sessionId, pluginSessionId, capability }) => {
       try {

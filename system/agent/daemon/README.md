@@ -63,14 +63,18 @@ Attempts. Unknown Attempts are never automatically replayed.
 [Plugin Injection Contract v1](../contracts/plugin-injection-v1.md): descriptor
 v3 validation, per-user enablement, on-demand bind/handshake with fresh
 `pluginSessionId`s, tool invocation (request ids, deadlines, cancellation,
-idempotency keys, no auto-replay) and resource collection into per-turn
-system-reminder blocks that never touch the Session store. The "bind" boundary
+idempotency keys, durable `tool_operations` records, and no auto-replay) and
+resource collection into per-turn system-reminder blocks that never touch the
+Session event history. External operations are fenced as `unknown` on daemon
+restart or an unconfirmed deadline; reusing their idempotency key returns the
+unknown result until an explicit reconciliation path is added. The "bind" boundary
 is an injected factory returning `{ endpoint, linkToDeath, unbind }`; Android
 Binder, freezer exemptions and SELinux stay platform work
 ([aosp-todo](../../../platform/aosp-integration/aosp-todo.md) §5).
 `createPluginBroker(scheduler, store)` in `index.mjs` wires lease validation
 and death revocation to the Scheduler's frozen lease semantics. Contract §13
-reference tests 1–12 live in `test/plugin-broker.test.mjs`; feeding collected
+reference tests 1–12 live in `test/plugin-broker.test.mjs` and persistence
+coverage lives in `test/store.test.mjs`; feeding collected
 reminders into the worker model input is the next integration step and is not
 part of this broker.
 

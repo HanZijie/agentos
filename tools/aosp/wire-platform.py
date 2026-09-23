@@ -69,11 +69,11 @@ def main():
 
     service_bp = "frameworks/base/services/core/Android.bp"
     content = read(service_bp).replace('"agentos_system_aidl-V1-java"',
-                                      '"//system/agent:agentos_system_aidl-V1-java"')
-    if '"//system/agent:agentos_system_aidl-V1-java"' not in content:
+                                      '"//system/agent:agentos_system_aidl-V2-java"')
+    if '"//system/agent:agentos_system_aidl-V2-java"' not in content:
         start = content.index('name: "services.core.unboosted"')
         end = content.index("    static_libs: [", start) + len("    static_libs: [")
-        content = content[:end] + '\n        "//system/agent:agentos_system_aidl-V1-java",' + content[end:]
+        content = content[:end] + '\n        "//system/agent:agentos_system_aidl-V2-java",' + content[end:]
     changes[service_bp] = content
 
     server = "frameworks/base/services/java/com/android/server/SystemServer.java"
@@ -118,10 +118,12 @@ def main():
                      "PRODUCT_PACKAGES += sideagentd"):
             if line not in content:
                 content += "\n" + line + "\n"
-        if path.startswith("device/google/cuttlefish/"):
-            for artifact in ("system/bin/sideagentd", "system/etc/init/sideagentd.rc"):
-                if artifact not in content:
-                    content += f"\nPRODUCT_ARTIFACT_PATH_REQUIREMENT_ALLOWED_LIST += {artifact}\n"
+        # Both products install the AgentOS daemon under /system.  AOSP's
+        # artifact path check otherwise treats these overlay outputs as
+        # unexpected files and stops the product build before ninja starts.
+        for artifact in ("system/bin/sideagentd", "system/etc/init/sideagentd.rc"):
+            if artifact not in content:
+                content += f"\nPRODUCT_ARTIFACT_PATH_REQUIREMENT_ALLOWED_LIST += {artifact}\n"
         changes[path] = content
 
     changed = {}

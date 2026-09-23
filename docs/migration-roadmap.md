@@ -36,7 +36,9 @@
 - [ ] 将参考实现的 Store 接入系统 daemon 的正式生命周期。
 - [ ] 将 Session 自动选择接入稳定 Binder/AIDL，完成真实 Jev secret 注入、超时/回退诊断和多用户系统测试。
 - [ ] 把 Task Store 从原型 JSON 文件迁移到 SQLite/WAL。
-- [ ] 为副作用工具增加 operation record 和幂等键。
+- [x] 在 sideagentd 参考数据面为副作用工具增加 SQLite `tool_operations`
+  记录、幂等键、参数冲突检测和 `unknown` fence；Android native sideagentd
+  的正式数据目录与恢复接线仍待完成。
 
 ## M4：前端迁移
 
@@ -54,10 +56,16 @@
 - [~] system_server 已实现包名、UID、签名、版本校验，待系统测试。
 - [~] manifest 发现、`BIND_AGENT_PLUGIN` 权限接线与 per-user 启用状态持久化已实现；待安装、升级、禁用、删除用户及重启测试。
 - [~] `BIND_AUTO_CREATE` 绑定、禁用时 unbind 和断连重试已实现；目前启用即保持绑定，按调用需求绑定/空闲释放及 freezer、phantom process killer 测试待完成。
-- [~] stable AIDL v1 `openPluginSession` 和基础 descriptor 校验已实现；descriptor v3、policy 与完整 capability 仍未移植。
+- [~] stable AIDL v1 `openPluginSession` 和基础 descriptor 校验已实现；
+  `agentos_system_aidl` V2 已冻结握手、capability grant、异步 tool/resource
+  callback 和 cancel 的协议骨架，system_server → sideagentd handoff、
+  descriptor v3 policy 与运行时调用仍未移植。
 - [ ] 修复同步握手无法取消的问题：两个不返回的 Plugin 可耗尽两个握手工作线程；使用可隔离或异步的握手机制并验证后续 Plugin 可恢复。
-- [ ] 将 Plugin capability 句柄传递给 sideagentd。
-- [ ] tool 调用管道：requestId 幂等、取消、deadline、幂等键与操作记录。
+- [~] 已增加 `AgentPluginSession` 稳定 parcelable，并由
+  `AgentManagerService` 注册到 native `sideagentd`；设备编译、Binder death
+  清理和正式 lease handoff 仍待验证。
+- [~] Node sideagentd 参考实现已覆盖 requestId/幂等键、取消、deadline 和
+  `tool_operations` unknown fence；Android sideagentd 的正式调用管道仍未接线。
 - [ ] resource 读取与 system reminder 注入管道：turn boundary 拉取、预算与确定性截断、非重放诊断记录。
 - [~] Plugin 断连会清理绑定与 session 并退避重试；完整 capability 撤销仍待移植与 Binder death 系统测试。
 - [ ] 将 MCP transport、tool 调用、resource 注入和模型运行时从参考实现移植到系统数据面，完成真实端到端验证。
