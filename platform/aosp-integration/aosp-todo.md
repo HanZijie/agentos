@@ -84,7 +84,7 @@ Pixel 8 真机仍未刷写，因此不能把整条真机路线标为 Ready。
 验证项（待验证假设，逐条回写结论）：
 
 - [x] bind flags 基线已在真实 Cuttlefish Probe 上验证：启用 session 期间进程保持 bound、`cached=false`，12 秒采样未冻结。
-- [~] 冻结后的重新绑定已验证：空闲 Probe 自然冻结后，重新 enable 在约 3.6 秒内恢复 active；仍需专门验证冻结期间同步 Binder 事务的 driver 返回语义。
+- [~] 冻结后的重新绑定已验证：空闲 Probe 自然冻结后，重新 enable 在约 3.6 秒内恢复 active；仍需专门验证冻结期间同步 Binder 事务的 driver 返回语义（涉及 `BINDER_FREEZE` / `TXNS_PENDING`）。
 - [x] 重新 enable → onBind → 握手完成已测得 3.6 秒，低于当前 5 秒握手超时；需要更多设备/负载样本。
 - [~] Probe 主进程在 bound session 和冻结/恢复路径中通过；phantom process killer 的专门 fork 子进程矩阵仍未完成。
 
