@@ -7,7 +7,8 @@ on post-fs-data
 service sideagentd /system/bin/sideagentd
     class main
     user sideagent
-    group sideagent
+    # Bionic resolves hostnames through /dev/socket/dnsproxyd (root:inet 0660).
+    group sideagent inet
     setenv AGENTOS_SECRET_FILE /data/agent/secrets/agent.env
     setenv AGENTOS_STATE_FILE /data/agent/state/sideagentd.state
     seclabel u:r:sideagentd:s0
