@@ -173,6 +173,10 @@ std::string ReadTls(SSL* ssl, int timeout_ms, const std::atomic<bool>* cancelled
     }
     const int error = SSL_get_error(ssl, read);
     if (error == SSL_ERROR_ZERO_RETURN) break;
+    // Some HTTPS providers close the TCP/TLS stream without sending a
+    // close_notify alert after a complete HTTP response. Preserve bytes
+    // already received and let the HTTP framing checks validate them.
+    if (read == 0 && !response.empty() && error == SSL_ERROR_SYSCALL) break;
     if (error == SSL_ERROR_WANT_READ && Wait(SSL_get_fd(ssl), POLLIN, timeout_ms, cancelled)) continue;
     if (error == SSL_ERROR_WANT_WRITE && Wait(SSL_get_fd(ssl), POLLOUT, timeout_ms, cancelled)) continue;
     return {};
