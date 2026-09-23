@@ -107,6 +107,12 @@ def main() -> int:
                         help="Gradle-built Agenriod APK to install in the image")
     parser.add_argument("--notes-apk", type=Path,
                         help="Gradle-built Notes APK to install in the image")
+    parser.add_argument("--demo-alarm-apk", type=Path,
+                        help="Gradle-built alarm demo APK to install in the image")
+    parser.add_argument("--demo-calendar-apk", type=Path,
+                        help="Gradle-built calendar demo APK to install in the image")
+    parser.add_argument("--demo-meeting-records-apk", type=Path,
+                        help="Gradle-built meeting-records demo APK to install in the image")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -120,6 +126,9 @@ def main() -> int:
         fail("--jobs cannot be negative")
     if (args.frontend_apk is None) != (args.notes_apk is None):
         fail("--frontend-apk and --notes-apk must be supplied together")
+    demo_apks = (args.demo_alarm_apk, args.demo_calendar_apk, args.demo_meeting_records_apk)
+    if any(path is not None for path in demo_apks) and not all(path is not None for path in demo_apks):
+        fail("all three demo APKs must be supplied together")
 
     out = (args.out_dir or root / "out-agentos").resolve()
     evidence = (args.evidence_dir or out / "evidence").resolve()
@@ -168,6 +177,12 @@ def main() -> int:
         if args.frontend_apk is not None:
             prepare_command.extend(["--frontend-apk", str(args.frontend_apk.resolve()),
                                     "--notes-apk", str(args.notes_apk.resolve())])
+        if all(path is not None for path in demo_apks):
+            prepare_command.extend([
+                "--demo-alarm-apk", str(args.demo_alarm_apk.resolve()),
+                "--demo-calendar-apk", str(args.demo_calendar_apk.resolve()),
+                "--demo-meeting-records-apk", str(args.demo_meeting_records_apk.resolve()),
+            ])
         stage("prepare", prepare_command)
         stage("soong", "source build/envsetup.sh; lunch \"$TARGET_PRODUCT-$TARGET_RELEASE-$TARGET_BUILD_VARIANT\"; m nothing -j" + jobs)
         stage("build", "source build/envsetup.sh; lunch \"$TARGET_PRODUCT-$TARGET_RELEASE-$TARGET_BUILD_VARIANT\"; m -j" + jobs)

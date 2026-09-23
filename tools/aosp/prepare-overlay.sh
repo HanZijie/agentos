@@ -30,6 +30,8 @@ while IFS= read -r -d '' source; do
         "$relative" == system/agent/frontend/prebuilt/* ||
         "$relative" == system/agent/frontend/privapp-permissions-agentos.xml ||
         "$relative" == system/agent/frontend/default-permissions-agentos.xml ||
+        "$relative" == "system/agent/demo/Android.bp" ||
+        "$relative" == system/agent/demo/prebuilt/* ||
         "$relative" == device/google/* ]]; then
     continue
   fi

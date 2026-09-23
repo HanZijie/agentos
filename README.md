@@ -72,6 +72,7 @@ platform/aosp-integration AOSP 产品接入、init、SELinux 和构建说明
 platform/checkout/        AOSP repo checkout 占位目录，不纳入本仓库
 plugins/api/              Plugin AIDL 与协议契约
 plugins/notes/            跨 App Notes Plugin 示例
+demo-apps/                独立的 alarm、calendar、meeting-records Demo APK
 plugins/catalog/          Plugin 开发约定和示例清单
 libraries/file-broker/    Android 文件能力适配器
 libraries/mcp-client/     Streamable HTTP MCP 客户端

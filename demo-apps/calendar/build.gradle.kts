@@ -1,0 +1,14 @@
+plugins { alias(libs.plugins.android.application) }
+
+android {
+    namespace = "com.example.agentos.demo.calendar"
+    compileSdk { version = release(37) }
+
+    defaultConfig {
+        applicationId = "com.example.agentos.demo.calendar"
+        minSdk = 30
+        targetSdk = 37
+        versionCode = 1
+        versionName = "0.1"
+    }
+}

@@ -217,6 +217,37 @@ class WirePlatformTest(unittest.TestCase):
         self.assertIn("Applied 0 files and 0 APKs;", repeat.stdout)
         self.assertEqual(self.snapshot(), before)
 
+    def test_demo_apks_are_staged_and_added_to_product(self):
+        alarm = self.parent / "alarm-debug.apk"
+        calendar = self.parent / "calendar-debug.apk"
+        records = self.parent / "meeting-records-debug.apk"
+        alarm.write_bytes(b"alarm-apk")
+        calendar.write_bytes(b"calendar-apk")
+        records.write_bytes(b"records-apk")
+        result = self.wire(
+            "--apply",
+            "--demo-alarm-apk", str(alarm),
+            "--demo-calendar-apk", str(calendar),
+            "--demo-meeting-records-apk", str(records),
+        )
+        self.assert_success(result)
+        self.assertEqual((self.root / "system/agent/demo/prebuilt/alarm.apk").read_bytes(), b"alarm-apk")
+        self.assertEqual((self.root / "system/agent/demo/prebuilt/calendar.apk").read_bytes(), b"calendar-apk")
+        self.assertEqual((self.root / "system/agent/demo/prebuilt/meeting-records.apk").read_bytes(), b"records-apk")
+        self.assertTrue((self.root / "system/agent/demo/Android.bp").is_file())
+        product = (self.root / "device/google/cuttlefish/shared/device.mk").read_text()
+        self.assertIn("PRODUCT_PACKAGES += agentos_demo_alarm agentos_demo_calendar agentos_demo_meeting_records", product)
+        before = self.snapshot()
+        repeat = self.wire(
+            "--apply",
+            "--demo-alarm-apk", str(alarm),
+            "--demo-calendar-apk", str(calendar),
+            "--demo-meeting-records-apk", str(records),
+        )
+        self.assert_success(repeat)
+        self.assertIn("Applied 0 files and 0 APKs;", repeat.stdout)
+        self.assertEqual(self.snapshot(), before)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

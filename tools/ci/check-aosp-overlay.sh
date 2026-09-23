@@ -16,6 +16,7 @@ required=(
   "$overlay/system/agent/frontend/Android.bp"
   "$overlay/system/agent/frontend/privapp-permissions-agentos.xml"
   "$overlay/system/agent/frontend/default-permissions-agentos.xml"
+  "$overlay/system/agent/demo/Android.bp"
   "$overlay/device/google/cuttlefish/shared/overlay/frameworks/base/core/res/res/values/agentos_config.xml"
   "$overlay/device/google/shusky/overlay/frameworks/base/core/res/res/values/agentos_config.xml"
   "$overlay/system/agent/init/sideagentd.rc"

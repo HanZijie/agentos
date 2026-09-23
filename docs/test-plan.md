@@ -226,6 +226,8 @@ Session 自动选择在 [`session-selection-v1.md`](../system/agent/contracts/se
 - `settings get secure assistant` 指向 Agenriod 的 VoiceInteraction service；
 - 长按电源键打开 VoiceInteraction session，Compose surface 出现并开始监听；
 - `cmd agentos plugins --user 0` 发现 Notes，启用后通过系统 endpoint 完成握手；
+- `agentos_demo_alarm`、`agentos_demo_calendar` 和 `agentos_demo_meeting_records`
+  已安装；meeting-records endpoint 按包身份完成发现；
 - Agent session 的输入、事件订阅、snapshot 和取消经由 AgentManagerService 到达 sideagentd。
 
 当前 native sideagentd 没有随镜像提供模型 runtime；提交输入会明确返回

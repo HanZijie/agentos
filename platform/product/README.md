@@ -6,6 +6,11 @@
 `agenriod_frontend_privapp_permissions`、
 `agenriod_frontend_default_permissions`。
 
+三个独立 Demo App 通过 `--demo-alarm-apk`、`--demo-calendar-apk` 和
+`--demo-meeting-records-apk` 一起接入时，会额外加入
+`agentos_demo_alarm`、`agentos_demo_calendar` 和
+`agentos_demo_meeting_records`。
+
 两个 APK 不提交到仓库。先通过 Gradle 生成 APK，再把路径传给接线脚本：
 
 ```bash

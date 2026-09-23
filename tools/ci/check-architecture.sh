@@ -51,10 +51,27 @@ for project in projects:
         errors.append(f"Missing Gradle module: {project}")
 for name in tracked:
     path = Path(name)
-    if path.name == "build.gradle.kts" and path.is_file():
+    if path.name == "build.gradle.kts" and path.is_file() and not name.startswith("demo-apps/"):
         for dep in re.findall(r'project\("(:[^" ]+)"\)', path.read_text()):
             if dep not in projects:
                 errors.append(f"Unknown Gradle dependency in {name}: {dep}")
+
+demo_settings = Path("demo-apps/settings.gradle.kts")
+if demo_settings.is_file():
+    demo_projects = set(re.findall(r'"(:[^" ]+)"', demo_settings.read_text()))
+    for project in demo_projects:
+        if project == ":plugin-api":
+            if not Path("plugins/api/build.gradle.kts").is_file():
+                errors.append("Missing shared demo Gradle module: :plugin-api")
+            continue
+        if not Path("demo-apps", project[1:].replace(":", "/"), "build.gradle.kts").is_file():
+            errors.append(f"Missing demo Gradle module: {project}")
+    for name in tracked:
+        if not name.startswith("demo-apps/") or not name.endswith("build.gradle.kts"):
+            continue
+        for dep in re.findall(r'project\("(:[^" ]+)"\)', Path(name).read_text()):
+            if dep not in demo_projects:
+                errors.append(f"Unknown demo Gradle dependency in {name}: {dep}")
 
 if errors:
     print("\n".join(errors), file=sys.stderr)

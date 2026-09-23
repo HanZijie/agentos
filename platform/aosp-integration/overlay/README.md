@@ -73,7 +73,10 @@ The probe module is available to build explicitly as `AgentOsPluginProbe`;
 wiring does not include it in `PRODUCT_PACKAGES`. The Agenriod and Notes APKs
 are generated outside this repository; pass both paths with `--frontend-apk`
 and `--notes-apk` to stage them under `system/agent/frontend/prebuilt/` and add
-the product packages. Their presence as source or a staged prebuilt is not
+the product packages. The independent `demo-apps` root has a parallel
+three-APK staging path using `--demo-alarm-apk`, `--demo-calendar-apk` and
+`--demo-meeting-records-apk`, which installs the demos under
+`system/agent/demo/prebuilt/`. Their presence as source or a staged prebuilt is not
 evidence of a successful image boot. Wiring fixture tests verify target
 selection, APK staging, rejection of wrong revisions, idempotence and backups;
 they do not compile or boot Android.

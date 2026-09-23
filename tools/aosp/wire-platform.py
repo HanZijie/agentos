@@ -19,13 +19,27 @@ def main():
                         help="Gradle-built Agenriod APK to sign into the product image")
     parser.add_argument("--notes-apk", type=Path,
                         help="Gradle-built Notes Plugin APK to sign into the product image")
+    parser.add_argument("--demo-alarm-apk", type=Path,
+                        help="Gradle-built AgentOS alarm demo APK")
+    parser.add_argument("--demo-calendar-apk", type=Path,
+                        help="Gradle-built AgentOS calendar demo APK")
+    parser.add_argument("--demo-meeting-records-apk", type=Path,
+                        help="Gradle-built AgentOS meeting-records demo APK")
     args = parser.parse_args()
     if (args.frontend_apk is None) != (args.notes_apk is None):
         parser.error("--frontend-apk and --notes-apk must be supplied together")
+    demo_apks = (args.demo_alarm_apk, args.demo_calendar_apk, args.demo_meeting_records_apk)
+    if any(path is not None for path in demo_apks) and not all(path is not None for path in demo_apks):
+        parser.error("all three demo APKs must be supplied together")
     if args.frontend_apk is not None:
         for path, label in ((args.frontend_apk, "frontend APK"), (args.notes_apk, "Notes APK")):
+            if path is None:
+                continue
             if not path.is_file():
                 parser.error(f"{label} does not exist: {path}")
+    for path, label in zip(demo_apks, ("alarm demo APK", "calendar demo APK", "meeting-records demo APK")):
+        if path is not None and not path.is_file():
+            parser.error(f"{label} does not exist: {path}")
     root = args.aosp_root.resolve()
     manifest = root / ".repo/manifests/default.xml"
     revision = ET.parse(manifest).getroot().find("default").get("revision")
@@ -72,7 +86,11 @@ def main():
             continue
         if relative == "system/agent/frontend/default-permissions-agentos.xml" and args.frontend_apk is None:
             continue
+        if relative == "system/agent/demo/Android.bp" and not all(path is not None for path in demo_apks):
+            continue
         if relative.startswith("system/agent/frontend/prebuilt/"):
+            continue
+        if relative.startswith("system/agent/demo/prebuilt/"):
             continue
         changes[relative] = source.read_text()
     if args.frontend_apk is not None:
@@ -84,6 +102,16 @@ def main():
                 binary_changes[relative] = source
         changes["system/agent/frontend/Android.bp"] = (
             overlay / "system/agent/frontend/Android.bp").read_text()
+    if all(path is not None for path in demo_apks):
+        for relative, source in (
+                ("system/agent/demo/prebuilt/alarm.apk", args.demo_alarm_apk),
+                ("system/agent/demo/prebuilt/calendar.apk", args.demo_calendar_apk),
+                ("system/agent/demo/prebuilt/meeting-records.apk", args.demo_meeting_records_apk)):
+            target = root / relative
+            if not target.is_file() or target.read_bytes() != source.read_bytes():
+                binary_changes[relative] = source
+        changes["system/agent/demo/Android.bp"] = (
+            overlay / "system/agent/demo/Android.bp").read_text()
     # Include the stable API checksum, while skipping macOS metadata above.
     for source in overlay.rglob(".hash"):
         changes[str(source.relative_to(overlay))] = source.read_text()
@@ -165,6 +193,9 @@ def main():
             product_lines.append("PRODUCT_PACKAGES += agenriod_frontend agenriod_notes")
             product_lines.append("PRODUCT_PACKAGES += agenriod_frontend_privapp_permissions")
             product_lines.append("PRODUCT_PACKAGES += agenriod_frontend_default_permissions")
+        if all(path is not None for path in demo_apks):
+            product_lines.append(
+                "PRODUCT_PACKAGES += agentos_demo_alarm agentos_demo_calendar agentos_demo_meeting_records")
         for line in product_lines:
             if line not in content:
                 content += "\n" + line + "\n"

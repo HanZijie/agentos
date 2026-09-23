@@ -1,0 +1,26 @@
+// Demo APKs are staged from the independent demo-apps Gradle root by
+// wire-platform.py. They are platform-signed product components for the
+// development image only.
+android_app_import {
+    name: "agentos_demo_alarm",
+    apk: "prebuilt/alarm.apk",
+    certificate: "platform",
+    product_specific: true,
+    dex_preopt: { enabled: false },
+}
+
+android_app_import {
+    name: "agentos_demo_calendar",
+    apk: "prebuilt/calendar.apk",
+    certificate: "platform",
+    product_specific: true,
+    dex_preopt: { enabled: false },
+}
+
+android_app_import {
+    name: "agentos_demo_meeting_records",
+    apk: "prebuilt/meeting-records.apk",
+    certificate: "platform",
+    product_specific: true,
+    dex_preopt: { enabled: false },
+}
