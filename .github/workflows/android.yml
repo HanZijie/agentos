@@ -51,7 +51,9 @@ jobs:
           distribution: temurin
           java-version: '25' # matches gradle/gradle-daemon-jvm.properties
       - uses: android-actions/setup-android@v4
-      - run: sdkmanager "platforms;android-37" "build-tools;36.0.0"
+      # API 37 is not published in Google's public repository yet. Keep the
+      # runner package and Gradle compileSdk on the same available API level.
+      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
       - uses: gradle/actions/setup-gradle@v4
       # The generated JS asset is tracked and verified by CI; no second npm install.
       - run: ./gradlew --no-daemon :frontends:agenriod:testDebugUnitTest :frontends:agenriod:lintDebug :plugins:notes:assembleDebug
