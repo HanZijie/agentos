@@ -112,7 +112,10 @@ bool SetNonBlocking(int fd, bool enabled) {
 Fd Connect(const Url& url, int timeout_ms, const std::atomic<bool>* cancelled) {
   addrinfo hints{};
   hints.ai_socktype = SOCK_STREAM;
-  hints.ai_family = AF_UNSPEC;
+  // AgentOS provider endpoints are configured as IPv4-capable HTTPS targets.
+  // Restricting lookup to IPv4 also keeps Android's static host resolver from
+  // returning EAI_NODATA for an IPv4-only ResolverHostsParcel mapping.
+  hints.ai_family = AF_INET;
   addrinfo* result = nullptr;
   const std::string service = std::to_string(url.port);
   const int address_error = getaddrinfo(url.host.c_str(), service.c_str(), &hints, &result);
