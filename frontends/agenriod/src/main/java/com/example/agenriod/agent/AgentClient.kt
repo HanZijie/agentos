@@ -80,7 +80,7 @@ class AgentClient(private val context: Context) {
         }).toString()
         if (systemMode) {
             scope.launch(Dispatchers.IO) {
-                systemClient.submit(content, requestId).onFailure { error ->
+                systemClient.submitAuto(content, requestId).onFailure { error ->
                     _state.value = _state.value.copy(status = error.message ?: "Agent input failed")
                 }.onSuccess {
                     systemSessionRequest = requestId
@@ -162,6 +162,18 @@ class AgentClient(private val context: Context) {
         val json = runCatching { JSONObject(event.json) }.getOrNull() ?: return
         when (json.optString("eventType")) {
             "task.queued" -> _state.value = _state.value.copy(status = "Queued", isRunning = true)
+            "task.output" -> {
+                val taskId = json.optString("taskId").ifBlank { event.sequence.toString() }
+                val text = json.optJSONObject("content")?.optString("text").orEmpty()
+                if (text.isNotBlank()) {
+                    _state.value = _state.value.copy(
+                        messages = _state.value.messages + ChatMessage(taskId, "assistant", text),
+                        status = "Running",
+                        isRunning = true,
+                    )
+                }
+            }
+            "task.completed" -> _state.value = _state.value.copy(status = "Ready", isRunning = false)
             "task.cancelled" -> _state.value = _state.value.copy(status = "Stopped", isRunning = false)
             "task.failed" -> {
                 val error = json.optJSONObject("error")?.optString("message").orEmpty()

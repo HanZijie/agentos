@@ -26,3 +26,7 @@ local.properties
 /platform/checkout/*
 !/platform/checkout/README.md
 /.local/
+# Runtime credentials are deployment-only and must never be staged.
+**/agent.env
+**/secrets/
+/agentos-secrets/

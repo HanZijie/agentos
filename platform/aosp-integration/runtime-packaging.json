@@ -4,22 +4,14 @@
   "productPackagePolicy": "runtime processes are separate from system_server",
   "runtimes": [
     {
-      "id": "node",
-      "status": "source_not_pinned",
-      "source": "",
+      "id": "native",
+      "status": "integrated",
+      "source": "system/agent/sideagentd/runtime_worker.cpp",
       "artifact": "",
-      "module": "agentos_node_runtime",
+      "module": "sideagentd",
+      "integrated": true,
       "abi": ["x86_64", "arm64-v8a"],
-      "entrypoint": "system/bin/agentos-node-runtime"
-    },
-    {
-      "id": "quickjs",
-      "status": "source_not_pinned",
-      "source": "",
-      "artifact": "",
-      "module": "agentos_quickjs_runtime",
-      "abi": ["x86_64", "arm64-v8a"],
-      "entrypoint": "system/bin/agentos-quickjs-runtime"
+      "entrypoint": "system/bin/sideagentd"
     },
     {
       "id": "pi",

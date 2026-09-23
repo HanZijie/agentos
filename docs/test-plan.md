@@ -230,8 +230,10 @@ Session 自动选择在 [`session-selection-v1.md`](../system/agent/contracts/se
   已安装；meeting-records endpoint 按包身份完成发现；
 - Agent session 的输入、事件订阅、snapshot 和取消经由 AgentManagerService 到达 sideagentd。
 
-当前 native sideagentd 没有随镜像提供模型 runtime；提交输入会明确返回
-`runtime_unavailable`。在 runtime 包、数据目录和恢复策略完成前，这一项只能算系统接线验收，不能算完整 Agent 功能验收。
+native sideagentd 已接入 MiniMax-M3 HTTPS Worker、Jev 自动 Session 选择、
+受保护 secret 文件和重启恢复 fencing。完整验收必须在匹配的 AOSP 镜像上运行
+`python3 tools/aosp/test-agentos-runtime.py --output-dir <new-dir>`；在该脚本
+返回 PASS 前，代码编译通过不能算真实系统验收。
 
 ### 8.1 Pull Request 门槛
 
@@ -295,7 +297,9 @@ Session 自动选择在 [`session-selection-v1.md`](../system/agent/contracts/se
 
 未执行：
 
-- AOSP/Cuttlefish/system_server/SELinux/真实 sideagentd：实现尚未达到可执行条件。
+- AOSP/Cuttlefish/system_server/SELinux/真实 sideagentd：native runtime 代码和
+  userdebug 验收脚本已提交；当前工作主机没有可连接的 Cuttlefish/ADB，尚未取得
+  本轮镜像的真实请求与重启证据。
 
 这份基线只证明上述命令在当前工作树和当前主机上通过；它不替代设备测试、系统镜像测试或真实部署验收。
 

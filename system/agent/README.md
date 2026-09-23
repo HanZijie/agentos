@@ -9,13 +9,13 @@ init/       init service 定义
 sepolicy/   sideagentd 的 domain、文件和 Binder 标签
 ```
 
-`sideagentd` 必须是独立进程。它不能链接到 Compose、Activity 或前端状态，也不能把第三方 Plugin 代码载入自己的地址空间。第一阶段只做健康检查、Binder 注册和可恢复任务骨架，再迁移 Agent Runtime。
+`sideagentd` 必须是独立进程。它不能链接到 Compose、Activity 或前端状态，也不能把第三方 Plugin 代码载入自己的地址空间。native runtime Worker、MiniMax/Jev 请求、secret 读取和恢复状态都在这个进程内；第三方 Plugin 仍通过受控 Binder capability 运行在自己的 UID。
 
 AOSP 的第一阶段 overlay 位于 [`platform/aosp-integration/overlay/`](../../platform/aosp-integration/overlay/)，源码基线固定为 `android-15.0.0_r34`。`62223a7` 及后续提交已保存 native health Binder、stable AIDL v1、init/SELinux、真实 probe APK 和自动接线脚本。Java 控制面还实现了 Plugin manifest 发现、包身份校验、按用户持久化启用状态、用户生命周期、绑定/握手、断连重试和基础 `cmd agentos`/`dumpsys agentos` 诊断。`tools/aosp/wire-platform.py` 默认接线 Cuttlefish，Pixel 8 为显式可选 target；旧文件备份位于 AOSP 树外。
 
 这些是已保存的代码，尚未构成已验证的 AgentOS 系统。本轮新主机环境已记录，官方 stock Cuttlefish build `16373615` 的 image/host 包已备份并校验到仓库外 `../.local/aosp-artifacts/2026-09-22-rebuild/fallback/`；其启动尚未完成，且 stock 包不含 AgentOS overlay。当前没有完成的 AgentOS 自定义镜像或 AgentOS 真机测试。构建中的镜像、日志和 manifest 用 `tools/aosp/backup-artifacts.py` 持续保留本地副本；验收状态见 [AOSP 全局 TODO](../../platform/aosp-integration/aosp-todo.md)。
 
-当前 native `sideagentd` 已增加 Plugin session 注册、授权名称检查和异步 invoke/resource 转发，以及前端 Session 的创建、输入幂等、事件订阅、snapshot 和取消骨架。Plugin probe 只验证发现与握手，不能证明 MCP 或工具调用可用。前端 Binder 已从 VoiceInteraction 和主 Compose 入口接入 `AgentManagerService`；模型 Agent runtime 尚未作为受版本约束的 Android 产品模块打包，提交任务会返回 `runtime_unavailable`，直到该包和恢复策略完成。
+当前 native `sideagentd` 已增加 Plugin session 注册、授权名称检查和异步 invoke/resource 转发，以及前端 Session 的创建、自动 Jev 选择、输入幂等、事件订阅、snapshot、取消和 recovery resolution。MiniMax-M3 Worker 从 `/data/agent/secrets/agent.env` 读取凭据，状态写入 `/data/agent/state/sideagentd.state`；未确认 Attempt 在 daemon 重启后标为 `unknown`，不会自动重放。Plugin probe 只验证发现与握手，不能证明 MCP 或工具调用可用。完整 native runtime 需要在匹配的 userdebug Cuttlefish 镜像上执行 `tools/aosp/test-agentos-runtime.py`。
 
 Session 调度契约见 [`contracts/session-scheduling-v1.md`](contracts/session-scheduling-v1.md)。实现前先通过该契约的 reference tests 验证串行 Session、跨 Session 并行、优先级公平、取消/超时、Snapshot 恢复和 Plugin capability lease 撤销。新输入的自动 Session 选择见 [`contracts/session-selection-v1.md`](contracts/session-selection-v1.md)：选择器在 `sideagentd` 内按 user 隔离 30 分钟活跃池，最多 254 个已有 Session；活跃候选不足时默认补足最近 20 个 `stale` 冷候选，并保留固定 `new_session` Choice。
 

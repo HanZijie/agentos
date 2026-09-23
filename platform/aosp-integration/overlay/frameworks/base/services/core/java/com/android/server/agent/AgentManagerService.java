@@ -24,6 +24,7 @@ import android.os.ResultReceiver;
 import android.os.ServiceManager;
 import android.os.ShellCallback;
 import android.os.ShellCommand;
+import android.os.SystemClock;
 import android.os.UserHandle;
 import android.os.UserManager;
 import android.util.ArrayMap;
@@ -600,6 +601,20 @@ public final class AgentManagerService extends SystemService {
                 throw new IllegalStateException("Agent input failed", e);
             }
         }
+        @Override public AgentEnqueueResult submitAutoInput(String frontendId, String metadataJson,
+                String requestId, String contentJson) {
+            enforceFrontendCaller();
+            if (frontendId == null || frontendId.isEmpty() || requestId == null || contentJson == null)
+                throw new IllegalArgumentException("frontendId, requestId and contentJson are required");
+            if (!callerOwnsFrontendId(frontendId))
+                throw new SecurityException("frontendId must name a package owned by the caller");
+            try {
+                return requireSideagentd().submitAutoInput(callingUserId(), Binder.getCallingUid(), frontendId,
+                        metadataJson == null ? "{}" : metadataJson, requestId, contentJson);
+            } catch (Exception e) {
+                throw new IllegalStateException("Agent automatic session selection failed", e);
+            }
+        }
         @Override public void subscribeOutput(String sessionId, long afterSequence,
                 IAgentEventCallback callback) {
             enforceFrontendCaller();
@@ -628,6 +643,15 @@ public final class AgentManagerService extends SystemService {
                 requireSideagentd().cancelTask(callingUserId(), Binder.getCallingUid(), sessionId, requestId);
             } catch (Exception e) {
                 throw new IllegalStateException("Agent task cancellation failed", e);
+            }
+        }
+        @Override public void resolveRecovery(String sessionId, String requestId) {
+            enforceFrontendCaller();
+            if (sessionId == null || requestId == null) return;
+            try {
+                requireSideagentd().resolveRecovery(callingUserId(), Binder.getCallingUid(), sessionId, requestId);
+            } catch (Exception e) {
+                throw new IllegalStateException("Agent recovery resolution failed", e);
             }
         }
         @Override public AgentSessionSnapshot getSnapshot(String sessionId) {
@@ -660,6 +684,75 @@ public final class AgentManagerService extends SystemService {
                                     .put("protocolVersion", h.protocolVersion).put("startedAtMs", h.startedAtMs));
                             return "ready".equals(h.state) ? 0 : 1;
                         }
+                        if (command.equals("runtime-test")) {
+                            boolean auto = false;
+                            boolean wait = true;
+                            StringBuilder prompt = new StringBuilder();
+                            String argument;
+                            while ((argument = getNextArg()) != null) {
+                                if ("--auto".equals(argument)) { auto = true; continue; }
+                                if ("--no-wait".equals(argument)) { wait = false; continue; }
+                                if (prompt.length() > 0) prompt.append(' ');
+                                prompt.append(argument);
+                            }
+                            if (prompt.length() == 0)
+                                throw new IllegalArgumentException("runtime-test requires a prompt");
+                            String requestId = "shell-" + UUID.randomUUID();
+                            String content = new JSONObject().put("content", new JSONArray().put(
+                                    new JSONObject().put("type", "text").put("text", prompt.toString()))).toString();
+                            ISideagentd daemon = requireSideagentd();
+                            AgentEnqueueResult receipt;
+                            String sessionId;
+                            if (auto) {
+                                receipt = daemon.submitAutoInput(UserHandle.USER_SYSTEM, Process.SYSTEM_UID,
+                                        "com.android.shell", "{}", requestId, content);
+                                sessionId = receipt.sessionId;
+                            } else {
+                                sessionId = daemon.createSession(UserHandle.USER_SYSTEM, Process.SYSTEM_UID,
+                                        "com.android.shell", "{}");
+                                receipt = daemon.submitInput(UserHandle.USER_SYSTEM, Process.SYSTEM_UID,
+                                        sessionId, requestId, content);
+                            }
+                            getOutPrintWriter().println(new JSONObject().put("accepted", receipt.accepted)
+                                    .put("sessionId", receipt.sessionId).put("taskId", receipt.taskId)
+                                    .put("requestId", requestId).put("deduplicated", receipt.deduplicated));
+                            if (!wait) return receipt.accepted ? 0 : 1;
+                            final long deadline = SystemClock.elapsedRealtime() + 180_000L;
+                            while (SystemClock.elapsedRealtime() < deadline) {
+                                AgentSessionSnapshot snapshot = daemon.getSnapshot(UserHandle.USER_SYSTEM,
+                                        Process.SYSTEM_UID, sessionId);
+                                getOutPrintWriter().println(snapshot.json);
+                                JSONObject value = new JSONObject(snapshot.json);
+                                JSONArray tasks = value.optJSONArray("tasks");
+                                String state = "";
+                                for (int i = 0; tasks != null && i < tasks.length(); i++) {
+                                    JSONObject task = tasks.optJSONObject(i);
+                                    if (task != null && requestId.equals(task.optString("requestId"))) {
+                                        state = task.optString("state"); break;
+                                    }
+                                }
+                                if ("completed".equals(state)) return 0;
+                                if ("failed".equals(state) || "cancelled".equals(state) || "unknown".equals(state)) return 1;
+                                SystemClock.sleep(250L);
+                            }
+                            getErrPrintWriter().println("runtime-test timed out");
+                            return 1;
+                        }
+                        if (command.equals("runtime-snapshot")) {
+                            String sessionId = getNextArgRequired();
+                            AgentSessionSnapshot snapshot = requireSideagentd().getSnapshot(
+                                    UserHandle.USER_SYSTEM, Process.SYSTEM_UID, sessionId);
+                            getOutPrintWriter().println(snapshot.json);
+                            return 0;
+                        }
+                        if (command.equals("runtime-recover")) {
+                            String sessionId = getNextArgRequired();
+                            String requestId = getNextArgRequired();
+                            requireSideagentd().resolveRecovery(UserHandle.USER_SYSTEM, Process.SYSTEM_UID,
+                                    sessionId, requestId);
+                            getOutPrintWriter().println("ok");
+                            return 0;
+                        }
                         int userId = UserHandle.USER_SYSTEM;
                         String next = getNextArg();
                         if ("--user".equals(next)) {
@@ -684,7 +777,7 @@ public final class AgentManagerService extends SystemService {
                     }
                 }
                 @Override public void onHelp() {
-                    getOutPrintWriter().println("AgentOS bootstrap: health | plugins [--user ID] | enable|disable [--user ID] PACKAGE");
+                    getOutPrintWriter().println("AgentOS: health | plugins [--user ID] | enable|disable [--user ID] PACKAGE | runtime-test [--auto] [--no-wait] PROMPT | runtime-snapshot SESSION_ID | runtime-recover SESSION_ID REQUEST_ID");
                 }
             }.exec(BinderService.this, in, out, err, args, callback, resultReceiver);
         }

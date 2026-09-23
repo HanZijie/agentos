@@ -79,6 +79,16 @@ def package_report(config: dict[str, Any], root: Path) -> tuple[bool, list[str]]
     failures: list[str] = []
     for item in config["runtimes"]:
         ident = item.get("id", "<unknown>")
+        if item.get("status") == "reference_only":
+            continue
+        if item.get("integrated") is True:
+            source = item.get("source")
+            module = item.get("module")
+            if not isinstance(source, str) or not (root / source).is_file():
+                failures.append(f"{ident}: integrated source is not present: {source!r}")
+            if not isinstance(module, str) or not module:
+                failures.append(f"{ident}: integrated runtime has no Android module")
+            continue
         if item.get("status") != "ready":
             failures.append(f"{ident}: status={item.get('status', 'missing')}")
             continue

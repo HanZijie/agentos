@@ -38,8 +38,10 @@ interface ISideagentd {
     oneway void cancelInvoke(String pluginSessionId, String requestId);
     String createSession(int userId, int frontendUid, String frontendId, String metadataJson);
     AgentEnqueueResult submitInput(int userId, int frontendUid, String sessionId, String requestId, String contentJson);
+    AgentEnqueueResult submitAutoInput(int userId, int frontendUid, String frontendId, String metadataJson, String requestId, String contentJson);
     void subscribeOutput(int userId, int frontendUid, String sessionId, long afterSequence, IAgentEventCallback callback);
     void unsubscribeOutput(int userId, int frontendUid, String sessionId, IAgentEventCallback callback);
     void cancelTask(int userId, int frontendUid, String sessionId, String requestId);
+    void resolveRecovery(int userId, int frontendUid, String sessionId, String requestId);
     AgentSessionSnapshot getSnapshot(int userId, int frontendUid, String sessionId);
 }

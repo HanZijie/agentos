@@ -53,8 +53,9 @@ normal product flow. Notes exposes the system Plugin endpoint directly and no
 longer registers through the Agenriod app-private Plugin host.
 
 The native session path is wired through `AgentManagerService` to
-`sideagentd`, including request IDs, event subscriptions, snapshots and
-cancellation. The current native image reports `runtime_unavailable` for a
-submitted task until the pinned Agent runtime is packaged into `sideagentd`.
-That runtime packaging and the target-device gesture evidence remain required
-for the final acceptance.
+`sideagentd`, including request IDs, automatic Jev Session selection, event
+subscriptions, snapshots, cancellation and explicit recovery resolution.
+`sideagentd` contains a native MiniMax-M3 HTTPS Worker and reads its credentials
+from the protected `/data/agent/secrets/agent.env` file. The matching userdebug
+Cuttlefish image must still run `tools/aosp/test-agentos-runtime.py` to produce
+the final real-request and restart-recovery evidence.

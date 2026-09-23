@@ -5,9 +5,12 @@ It includes neither an AOSP checkout nor proprietary device files. The wiring
 and probe were saved in `62223a7`; subsequent commits add target selection,
 checkout revision checks, external backups and wiring tests.
 
-The first slice provides:
+The native runtime slice provides:
 
-- a versioned health and Plugin-session AIDL with native `sideagentd` Binder service;
+- a versioned health, Session, automatic Jev selection, and Plugin-session AIDL
+  with native `sideagentd` Binder service;
+- a native HTTPS Worker for MiniMax-M3, a mode-0600 secret file contract, and
+  durable state/recovery fencing under `/data/agent`;
 - stable AIDL v2 Plugin endpoint protocol (`agentos_system_aidl-V2`) with
   structured handshake, capability grant, asynchronous tool/resource request,
   typed terminal result/error, cancellation, and host callback boundaries;
@@ -16,7 +19,8 @@ The first slice provides:
   checks package/UID/signer/version identity, persists per-user grants, handles
   user lifecycle events, binds with `BIND_AUTO_CREATE`, and creates a fresh
   session on each bind with disconnect retry;
-- basic `cmd agentos health|plugins|enable|disable` and `dumpsys agentos`
+- basic `cmd agentos health|plugins|enable|disable|runtime-test|runtime-snapshot`
+  and `dumpsys agentos`
   diagnostics; control Binder methods currently require root or system UID;
 - the real `AgentOsPluginProbe` test APK for discovery, binding, handshake and
   process-lifecycle checks; it has no model, MCP or tool/resource pipeline;
@@ -26,7 +30,8 @@ The first slice provides:
 
 `agentos_system_aidl` version 1 remains frozen for the discovery probe and
 existing control-plane clients. Version 2 contains the Plugin data-plane
-boundary. The current development surface appends frontend Session methods;
+boundary. The current development surface appends frontend Session methods and
+an automatic `submitAutoInput` method;
 the AIDL module is temporarily unfrozen until those methods are frozen as the
 next public version. Version 2 transaction numbers remain unchanged:
 

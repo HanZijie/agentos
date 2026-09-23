@@ -34,15 +34,24 @@ aidl_interface {
 
 cc_binary {
     name: "sideagentd",
-    srcs: ["sideagentd/main.cpp"],
+    srcs: [
+        "sideagentd/main.cpp",
+        "sideagentd/https_client.cpp",
+        "sideagentd/secret_store.cpp",
+        "sideagentd/runtime_worker.cpp",
+        "sideagentd/session_selector.cpp",
+    ],
     shared_libs: [
         "libbase",
         "libbinder_ndk",
+        "libcrypto",
+        "libssl",
     ],
     static_libs: ["agentos_system_aidl-V3-ndk"],
     init_rc: ["init/sideagentd.rc"],
     // The init rc uses /system/bin/sideagentd. Keep this system-installed
     // until a product-specific path is selected and recorded in the rc.
     product_specific: false,
+    cpp_std: "c++17",
     cflags: ["-DLOG_TAG=\"sideagentd\""],
 }

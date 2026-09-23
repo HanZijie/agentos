@@ -1,11 +1,15 @@
 on post-fs-data
     mkdir /data/agent 0700 sideagent sideagent
+    mkdir /data/agent/state 0700 sideagent sideagent
+    mkdir /data/agent/secrets 0700 sideagent sideagent
     restorecon_recursive /data/agent
 
 service sideagentd /system/bin/sideagentd
     class main
     user sideagent
     group sideagent
+    setenv AGENTOS_SECRET_FILE /data/agent/secrets/agent.env
+    setenv AGENTOS_STATE_FILE /data/agent/state/sideagentd.state
     seclabel u:r:sideagentd:s0
 
 # init supervises and restarts the daemon on exit. No boot-complete restart.

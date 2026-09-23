@@ -49,10 +49,12 @@ Pixel 8 真机仍未刷写，因此不能把整条真机路线标为 Ready。
 - [~] `PRODUCT_PACKAGES` 已由 Cuttlefish/Pixel 8 target 接线脚本加入 sideagentd。传入 `--frontend-apk` 与 `--notes-apk` 后，脚本还会将两个 APK 作为 platform-signed product 组件接入，并安装前端 privapp allowlist；完整镜像编译和设备验收仍待本轮验证。
 - [ ] 数据目录：`/data/agent/<user>/` 目录创建、属主与标签（配合 §2）。
 - [x] Binder 服务注册：`service list` 同时出现 `agentos` 与 `agentos.sideagentd`，`cmd agentos health` 返回 `state=ready`。
-- [~] native `sideagentd` 已增加 V2 Plugin session 注册、granted tool/resource
-  校验、异步 endpoint 转发和 cancel 骨架；Soong/设备编译与 Binder death
-  恢复仍待验证。
-- [ ] Jev secret 注入：为迁移后的 sideagentd 设计受 SELinux/UID 保护的运行时 secret 文件或 SecretStore；不能把用户 API key 写入 Git、通用镜像或诊断输出。当前 overlay 仍只有 health service，未宣称已支持 Session 选择。
+- [~] native `sideagentd` 已接入 V2 Plugin session、MiniMax HTTPS Worker、
+  Jev 自动 Session 选择、持久化任务/事件和 restart recovery fencing；Soong、
+  SELinux denial 审计、设备编译与 Binder death 恢复仍待验证。
+- [~] Jev/MiniMax secret 注入：`/data/agent/secrets/agent.env` 由 sideagent UID
+  读取并要求 0600，密钥不进入镜像或诊断输出；`tools/aosp/test-agentos-runtime.py`
+  提供 userdebug Cuttlefish 的真实调用入口，设备证据尚未取得。
 
 ## 2. SELinux
 
@@ -67,7 +69,9 @@ Pixel 8 真机仍未刷写，因此不能把整条真机路线标为 Ready。
 - [x] AgentManagerService 已编译并在 system_server 中运行；`cmd agentos health` 走真实 system_server → sideagentd Binder 链路返回 `ready`。
 - [x] stable AIDL v1 与结构化 Parcelable 已随镜像编译并安装；V2 Plugin
   endpoint 协议骨架已加入并通过 API 兼容性检查，V1 生成物保持可用。
-- [ ] sideagentd 生命周期监管：启动等待注册、Binder death 重连、状态恢复。
+- [~] sideagentd 生命周期监管：init 重启 daemon；持久化 Session/Task/Event，
+  未确认 Attempt 在重新启动时标为 `unknown` 并发出 `task.recovery_required`；
+  system_server Binder death 重连和设备矩阵仍待验证。
 - [~] UserManager 生命周期：overlay 已处理 user start/stop/unlock 与删除用户时的 Plugin 清理；Session/lease 撤销仍未实现，待系统测试。
 - [x] Plugin 身份校验和 manifest discovery 已通过内置 `com.example.agentos.probe`：发现后默认 disabled，`cmd agentos enable` 后状态为 `active`，日志收到 `AgentOsProbe: open`。
 - [~] per-user Plugin 启用状态持久化：本轮验证了 user 0 的启用和运行状态；重启/升级/多用户覆盖仍待完成。
@@ -112,13 +116,13 @@ Pixel 8 真机仍未刷写，因此不能把整条真机路线标为 Ready。
 
 ## 6. 诊断
 
-- [x] `dumpsys agentos`、`cmd agentos health|plugins|enable|disable` 已在自定义镜像中真实执行；Session/Task 计数、sequence、lease 与资源注入统计仍未完成。
-- [x] `cmd agentos health|plugins|enable|disable` 基础命令已在自定义镜像中真实执行；`cmd agent` 兼容命令及完整 sessions/tasks 诊断仍未完成。
+- [~] `dumpsys agentos`、`cmd agentos health|plugins|enable|disable` 已在自定义镜像中真实执行；新增 `runtime-test`、`runtime-snapshot`、Session/Task 诊断等待本轮镜像验证。
+- [~] `cmd agentos` 基础命令已在自定义镜像中真实执行；MiniMax/Jev 真实请求和 restart recovery 由 `test-agentos-runtime.py` 覆盖，当前尚无本轮设备证据。
 
 ## 7. 系统测试（Cuttlefish，M6）
 
 - [x] 官方 stock Cuttlefish build `16373615` image/host 本地 SHA-256 校验、QEMU 启动和 ADB 已验证，证据见 [runbook](stock-cuttlefish.md)；此项仅覆盖 stock 系统。
-- [x] AgentOS 自定义 sideagentd、SELinux 标签、Binder 注册和 system_server health 运行验证。
+- [~] AgentOS 自定义 sideagentd、SELinux 标签、Binder 注册和 system_server health 运行验证；上一轮 health 证据仍有效，native runtime 代码变更后的镜像需重新验证。
 - [ ] 固化 Ubuntu 24.04 ready 容器的依赖与 Dockerfile，并完成干净主机复现；当前现场镜像需保留。
 - [ ] 多用户：user start/stop/unlock 的 Session 与 lease 撤销语义。
 - [~] Plugin 端到端已完成 manifest 发现 → 启用 → 按需 bind → 握手 → 禁用 → Binder death 重连 → 用户删除清理；tool/resource 调用和 capability lease 仍待完成。

@@ -31,8 +31,10 @@ interface IAgentManager {
     void setPluginEnabled(int userId, String pluginId, boolean enabled);
     String createSession(String frontendId, String metadataJson);
     AgentEnqueueResult submitInput(String sessionId, String requestId, String contentJson);
+    AgentEnqueueResult submitAutoInput(String frontendId, String metadataJson, String requestId, String contentJson);
     void subscribeOutput(String sessionId, long afterSequence, IAgentEventCallback callback);
     void unsubscribeOutput(String sessionId, IAgentEventCallback callback);
     void cancelTask(String sessionId, String requestId);
+    void resolveRecovery(String sessionId, String requestId);
     AgentSessionSnapshot getSnapshot(String sessionId);
 }

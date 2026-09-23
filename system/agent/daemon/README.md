@@ -35,9 +35,16 @@ in bounded candidate stages and then once more over the stage winners plus
 `createSideagentd()` wires `JevHttpClient` by default. The API key is read from
 `AGENTOS_JEV_API_KEY` (or `TYPESAFE_API_KEY`) at process start; see
 `jev.env.example`. Missing keys, timeouts, provider errors, and invalid choices
-fall back to `new_session` and never block durable input enqueue. The actual
-Android native `sideagentd` in the AOSP overlay is still health-only; this is a
-reference data-plane implementation until the runtime is migrated.
+fall back to `new_session` and never block durable input enqueue.
+
+The AOSP overlay contains the corresponding native data plane. The `sideagentd`
+worker reads a mode-0600 `/data/agent/secrets/agent.env`, sends
+Anthropic-compatible requests to MiniMax-M3, uses the Jev Choice endpoint for
+the automatic Session path, and writes session/task/event state to
+`/data/agent/state/sideagentd.state`. A daemon restart fences an unfinished
+request as `unknown` and emits `task.recovery_required`; it never replays that
+attempt automatically. A userdebug Cuttlefish acceptance run is provided by
+`tools/aosp/test-agentos-runtime.py`.
 
 ```js
 const receipt = await daemon.scheduler.submitAutoInput({

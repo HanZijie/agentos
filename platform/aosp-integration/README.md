@@ -24,7 +24,9 @@ tools/aosp/                           接线、备份及其测试
 
 ## Overlay 与自动接线
 
-`overlay/` 已包含 stable AIDL v1、native `sideagentd` health Binder、init/SELinux 文件和 `AgentManagerService`。控制面实现了 manifest 发现、包身份校验、按用户保存启用状态、用户生命周期、绑定/握手、断连重试，以及 `cmd agentos` 和 `dumpsys agentos` 的基础诊断。代码存在不代表这些行为已在 Android 系统上验证。
+`overlay/` 已包含 stable AIDL、native `sideagentd` runtime Worker、MiniMax/Jev
+请求、受保护 secret 文件、持久化事件和重启恢复边界，以及
+`AgentManagerService`。控制面实现了 manifest 发现、包身份校验、按用户保存启用状态、用户生命周期、绑定/握手、断连重试，以及 `cmd agentos`、`runtime-test` 和 `dumpsys agentos` 的基础诊断。代码存在不代表这些行为已在 Android 系统上验证。
 
 在完成所选项目同步并保存 checkout 状态后，从仓库根目录执行：
 

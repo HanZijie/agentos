@@ -6,7 +6,7 @@
 
 AgentOS 将 Agent 作为 Android 系统组件运行。Agent 由系统启动和监管，拥有自己的进程、持久化状态、权限边界和输出事件流；Android App 只是前端，可以创建 Session、提交输入和订阅输出。
 
-当前仓库处于系统化迁移阶段。`frontends/agenriod` 保留旧 Agent Host 作为测试兼容代码；正常系统镜像路径由 `AgentManagerService` 和 `sideagentd` 提供 Session、事件和 Plugin 路由。Runtime、任务存储和模型执行仍需按版本打包到 `sideagentd`，否则系统会对提交任务返回 `runtime_unavailable`。
+当前仓库处于系统化迁移阶段。`frontends/agenriod` 保留旧 Agent Host 作为测试兼容代码；正常系统镜像路径由 `AgentManagerService` 和 `sideagentd` 提供 Session、事件和 Plugin 路由。native `sideagentd` 已包含 MiniMax-M3 Worker、Jev Session 选择、secret 读取和重启恢复 fencing；匹配的 AOSP 镜像仍需通过 Cuttlefish 真实请求脚本后才算设备验收完成。
 
 前端原型还提供了一个 Android 系统助理入口：将 Agenriod 设为默认数字助理后，设备支持的助理手势可以唤起 Siri 风格的 Compose surface。配置步骤、语音行为和电源键映射边界见 [`docs/assistant-frontend.md`](docs/assistant-frontend.md)。
 
@@ -15,7 +15,7 @@ AgentOS 将 Agent 作为 Android 系统组件运行。Agent 由系统启动和�
 ```text
 Android init
 └── sideagentd                         # 独立系统进程，Agent 数据面
-    ├── Agent Runtime / QuickJS
+    ├── Native Runtime Worker / Model Gateway
     ├── Task Store / Session Store
     ├── Model Gateway
     ├── Capability Broker
@@ -90,7 +90,7 @@ Pi 的 ACP v1 stdio 适配器见 [`docs/acp-pi-adapter.md`](docs/acp-pi-adapter.
 
 系统迁移需要把这些职责移到 `sideagentd`：
 
-- 任务和 Session 使用 SQLite/WAL 或等价的事件日志，支持崩溃恢复、序列号和幂等键；
+  - 任务和 Session 使用受保护的持久化事件状态，支持崩溃恢复、序列号和幂等键；
 - Runtime 通过 Capability Broker 访问文件、网络、系统能力和 Plugin；
 - Plugin 由 PackageManager、UID、签名和系统权限共同校验；
 - App 只持有前端订阅和临时显示状态；

@@ -50,6 +50,20 @@ class AgentManagerClient(
         service.submitInput(id, requestId, contentJson)
     }
 
+    /** Lets sideagentd choose the best user-local Session through Jev. */
+    fun submitAuto(contentJson: String, requestId: String = UUID.randomUUID().toString()): Result<AgentEnqueueResult> = runCatching {
+        val service = manager ?: error("AgentManagerService is unavailable")
+        val oldId = sessionId
+        val result = service.submitAutoInput(frontendId, "{}", requestId, contentJson)
+        val selected = result.sessionId
+        if (result.accepted && !selected.isNullOrBlank() && selected != oldId) {
+            if (!oldId.isNullOrBlank()) runCatching { service.unsubscribeOutput(oldId, callback) }
+            sessionId = selected
+            service.subscribeOutput(selected, 0L, callback)
+        }
+        result
+    }
+
     fun snapshot(): Result<AgentSessionSnapshot> = runCatching {
         val service = manager ?: error("AgentManagerService is unavailable")
         val id = sessionId ?: error("Agent session is not connected")
@@ -60,6 +74,12 @@ class AgentManagerClient(
         val service = manager ?: return
         val id = sessionId ?: return
         runCatching { service.cancelTask(id, requestId) }
+    }
+
+    fun resolveRecovery(requestId: String) {
+        val service = manager ?: return
+        val id = sessionId ?: return
+        runCatching { service.resolveRecovery(id, requestId) }
     }
 
     override fun close() {
