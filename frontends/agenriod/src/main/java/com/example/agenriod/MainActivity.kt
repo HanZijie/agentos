@@ -394,7 +394,12 @@ private fun SettingsPane(state: AgentUiState, host: AgentClient, modifier: Modif
             FilterChip(selected = state.settingsPage == "plugins", onClick = host::openPluginManager, label = { Text("Plugins") })
             FilterChip(selected = state.settingsPage == "hooks", onClick = host::openHooks, label = { Text("Hooks") })
         }
-        OutlinedButton(onClick = { context.startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS)) }, modifier = Modifier.fillMaxWidth()) { Text("Choose Agenriod as system assistant") }
+        OutlinedButton(onClick = { context.startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS)) }, modifier = Modifier.fillMaxWidth()) { Text("Set Agenriod as system assistant") }
+        Text(
+            "Set Agenriod as the default assistant, then use the system assistant gesture (on supported devices this can be a long press of the power button) to open the floating assistant surface from another app.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         when (state.settingsPage) {
             "plugins" -> PluginManagement(state, host, Modifier.weight(1f))
             "hooks" -> HookSettings(hooks, { hooks = it }, Modifier.weight(1f))
