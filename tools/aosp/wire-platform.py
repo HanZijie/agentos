@@ -142,6 +142,11 @@ def main():
                               '"//system/agent:agentos_system_aidl-V3-java"')
     content = content.replace('"//system/agent:agentos_system_aidl-java"',
                               '"//system/agent:agentos_system_aidl-V3-java"')
+    aidl_dep = '        "//system/agent:agentos_system_aidl-V3-java",'
+    if content.count(aidl_dep) > 1:
+        first = content.find(aidl_dep)
+        content = content[:first + len(aidl_dep)] + content[first + len(aidl_dep):].replace(
+            aidl_dep, '', 1)
     if '"//system/agent:agentos_system_aidl-V3-java"' not in content:
         start = content.index('name: "services.core.unboosted"')
         end = content.index("    static_libs: [", start) + len("    static_libs: [")
