@@ -8,6 +8,8 @@ AgentOS 将 Agent 作为 Android 系统组件运行。Agent 由系统启动和�
 
 当前仓库处于系统化迁移阶段。`frontends/agenriod` 仍包含可运行的 Android 原型和嵌入式 Agent Host，用来保持已有行为和测试；新的系统宿主放在 `system/agent` 和 `platform`，后续会逐步把 Runtime、任务存储和 Plugin Broker 从原型 App 迁入 `sideagentd`。
 
+前端原型还提供了一个 Android 系统助理入口：将 Agenriod 设为默认数字助理后，设备支持的助理手势可以唤起 Siri 风格的 Compose surface。配置步骤、语音行为和电源键映射边界见 [`docs/assistant-frontend.md`](docs/assistant-frontend.md)。
+
 ## 目标架构
 
 ```text
