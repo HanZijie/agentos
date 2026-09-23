@@ -66,7 +66,6 @@ bool ParseUrl(const std::string& input, Url* out) {
       out->host = authority;
     }
   }
-  }
   if (out->host.empty() || out->port < 1 || out->port > 65535) return false;
   return true;
 }
