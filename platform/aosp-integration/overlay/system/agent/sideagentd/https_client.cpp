@@ -1,5 +1,6 @@
 #include "https_client.h"
 
+#include <android-base/logging.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 
@@ -114,7 +115,12 @@ Fd Connect(const Url& url, int timeout_ms, const std::atomic<bool>* cancelled) {
   hints.ai_family = AF_UNSPEC;
   addrinfo* result = nullptr;
   const std::string service = std::to_string(url.port);
-  if (getaddrinfo(url.host.c_str(), service.c_str(), &hints, &result) != 0) return Fd();
+  const int address_error = getaddrinfo(url.host.c_str(), service.c_str(), &hints, &result);
+  if (address_error != 0) {
+    LOG(ERROR) << "HTTPS DNS lookup failed host=" << url.host
+               << " gai=" << address_error;
+    return Fd();
+  }
   Fd socket;
   for (addrinfo* item = result; item != nullptr; item = item->ai_next) {
     if (Cancelled(cancelled)) break;
@@ -132,6 +138,7 @@ Fd Connect(const Url& url, int timeout_ms, const std::atomic<bool>* cancelled) {
     }
   }
   freeaddrinfo(result);
+  if (socket.get() < 0) LOG(ERROR) << "HTTPS connect failed host=" << url.host;
   return socket;
 }
 
@@ -207,7 +214,11 @@ HttpResponse HttpsClient::PostJson(const std::string& url,
   static std::once_flag ssl_once;
   std::call_once(ssl_once, [] { OPENSSL_init_ssl(0, nullptr); });
   std::unique_ptr<SSL_CTX, decltype(&SSL_CTX_free)> context(SSL_CTX_new(TLS_client_method()), SSL_CTX_free);
-  if (!context) { result.error = "tls_context_failed"; return result; }
+  if (!context) {
+    LOG(ERROR) << "HTTPS TLS context creation failed";
+    result.error = "tls_context_failed";
+    return result;
+  }
   SSL_CTX_set_verify(context.get(), SSL_VERIFY_PEER, nullptr);
 #if defined(__ANDROID__)
   const char* ca_dir = access("/apex/com.android.conscrypt/cacerts", R_OK) == 0
@@ -216,15 +227,22 @@ HttpResponse HttpsClient::PostJson(const std::string& url,
 #else
   if (SSL_CTX_set_default_verify_paths(context.get()) != 1) {
 #endif
+    LOG(ERROR) << "HTTPS trust store load failed host=" << parsed.host;
     result.error = "tls_trust_store_unavailable"; return result;
   }
   std::unique_ptr<SSL, decltype(&SSL_free)> ssl(SSL_new(context.get()), SSL_free);
-  if (!ssl) { result.error = "tls_session_failed"; return result; }
+  if (!ssl) {
+    LOG(ERROR) << "HTTPS TLS session creation failed host=" << parsed.host;
+    result.error = "tls_session_failed";
+    return result;
+  }
   SSL_set_fd(ssl.get(), socket.get());
   if (SSL_set_tlsext_host_name(ssl.get(), parsed.host.c_str()) != 1) {
+    LOG(ERROR) << "HTTPS SNI setup failed host=" << parsed.host;
     result.error = "tls_hostname_failed"; return result;
   }
   if (SSL_set1_host(ssl.get(), parsed.host.c_str()) != 1) {
+    LOG(ERROR) << "HTTPS hostname verification setup failed host=" << parsed.host;
     result.error = "tls_hostname_failed"; return result;
   }
   int handshake_error = 0;
@@ -235,6 +253,8 @@ HttpResponse HttpsClient::PostJson(const std::string& url,
     handshake_error = SSL_get_error(ssl.get(), connected);
     if (handshake_error == SSL_ERROR_WANT_READ && Wait(socket.get(), POLLIN, timeout_ms, cancelled)) continue;
     if (handshake_error == SSL_ERROR_WANT_WRITE && Wait(socket.get(), POLLOUT, timeout_ms, cancelled)) continue;
+    LOG(ERROR) << "HTTPS TLS handshake failed host=" << parsed.host
+               << " ssl_error=" << handshake_error;
     result.error = "tls_connect_failed"; return result;
   }
 
@@ -247,10 +267,15 @@ HttpResponse HttpsClient::PostJson(const std::string& url,
   for (const auto& [name, value] : headers) request << name << ": " << value << "\r\n";
   request << "\r\n" << body;
   if (!WriteTls(ssl.get(), request.str(), timeout_ms, cancelled)) {
+    LOG(ERROR) << "HTTPS request write failed host=" << parsed.host;
     result.error = Cancelled(cancelled) ? "cancelled" : "tls_write_failed"; return result;
   }
   std::string raw = ReadTls(ssl.get(), timeout_ms, cancelled);
-  if (raw.empty()) { result.error = Cancelled(cancelled) ? "cancelled" : "tls_read_failed"; return result; }
+  if (raw.empty()) {
+    LOG(ERROR) << "HTTPS response read failed host=" << parsed.host;
+    result.error = Cancelled(cancelled) ? "cancelled" : "tls_read_failed";
+    return result;
+  }
   const size_t header_end = raw.find("\r\n\r\n");
   if (header_end == std::string::npos) { result.error = "invalid_http_response"; return result; }
   const size_t first_line_end = raw.find("\r\n");
