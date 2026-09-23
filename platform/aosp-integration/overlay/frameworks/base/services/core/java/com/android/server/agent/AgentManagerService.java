@@ -543,18 +543,8 @@ public final class AgentManagerService extends SystemService {
     private void enforceFrontendCaller() {
         int uid = Binder.getCallingUid();
         if (uid == Process.SYSTEM_UID || uid == Process.ROOT_UID) return;
-        boolean granted = false;
-        String[] packages = mPackageManager.getPackagesForUid(uid);
-        if (packages != null) {
-            for (String packageName : packages) {
-                if (mPackageManager.checkPermission(PERMISSION_ACCESS_AGENT, packageName)
-                        == PackageManager.PERMISSION_GRANTED) {
-                    granted = true;
-                    break;
-                }
-            }
-        }
-        if (!granted) {
+        if (getContext().checkCallingPermission(PERMISSION_ACCESS_AGENT)
+                != PackageManager.PERMISSION_GRANTED) {
             throw new SecurityException("AgentOS frontend permission is required");
         }
     }

@@ -1,0 +1,5 @@
+/system/bin/sideagentd sideagentd_exec
+/data/agent sideagentd_data_file
+/data/agent/state/sideagentd.state sideagentd_data_file
+/data/agent/secrets sideagentd_secret_file
+/data/agent/secrets/agent.env sideagentd_secret_file

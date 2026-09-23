@@ -12,6 +12,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <charconv>
 #include <cctype>
 #include <cerrno>
 #include <cstring>
@@ -48,20 +49,16 @@ bool ParseUrl(const std::string& input, Url* out) {
     if (close + 1 < authority.size()) {
       if (authority[close + 1] != ':') return false;
       const std::string port_text = authority.substr(close + 2);
-      char* end = nullptr;
-      const long port = std::strtol(port_text.c_str(), &end, 10);
-      if (end == port_text.c_str() || *end != '\0') return false;
-      out->port = static_cast<int>(port);
+      const auto parsed = std::from_chars(port_text.data(), port_text.data() + port_text.size(), out->port);
+      if (parsed.ec != std::errc() || parsed.ptr != port_text.data() + port_text.size()) return false;
     }
   } else {
     const size_t colon = authority.rfind(':');
     if (colon != std::string::npos && authority.find(':') == colon) {
       out->host = authority.substr(0, colon);
       const std::string port_text = authority.substr(colon + 1);
-      char* end = nullptr;
-      const long port = std::strtol(port_text.c_str(), &end, 10);
-      if (end == port_text.c_str() || *end != '\0') return false;
-      out->port = static_cast<int>(port);
+      const auto parsed = std::from_chars(port_text.data(), port_text.data() + port_text.size(), out->port);
+      if (parsed.ec != std::errc() || parsed.ptr != port_text.data() + port_text.size()) return false;
     } else {
       out->host = authority;
     }
@@ -181,7 +178,10 @@ std::string DecodeChunked(const std::string& input) {
     if (line_end == std::string::npos) return {};
     const std::string length_text = input.substr(offset, line_end - offset);
     const size_t semicolon = length_text.find(';');
-    const unsigned long length = std::stoul(length_text.substr(0, semicolon));
+    const std::string size_text = length_text.substr(0, semicolon);
+    size_t length = 0;
+    const auto parsed = std::from_chars(size_text.data(), size_text.data() + size_text.size(), length, 16);
+    if (parsed.ec != std::errc() || parsed.ptr != size_text.data() + size_text.size()) return {};
     offset = line_end + 2;
     if (length == 0) return output;
     if (length > input.size() - offset || input.substr(offset + length, 2) != "\r\n") return {};
@@ -209,12 +209,21 @@ HttpResponse HttpsClient::PostJson(const std::string& url,
   std::unique_ptr<SSL_CTX, decltype(&SSL_CTX_free)> context(SSL_CTX_new(TLS_client_method()), SSL_CTX_free);
   if (!context) { result.error = "tls_context_failed"; return result; }
   SSL_CTX_set_verify(context.get(), SSL_VERIFY_PEER, nullptr);
+#if defined(__ANDROID__)
+  const char* ca_dir = access("/apex/com.android.conscrypt/cacerts", R_OK) == 0
+      ? "/apex/com.android.conscrypt/cacerts" : "/system/etc/security/cacerts";
+  if (SSL_CTX_load_verify_locations(context.get(), nullptr, ca_dir) != 1) {
+#else
   if (SSL_CTX_set_default_verify_paths(context.get()) != 1) {
+#endif
     result.error = "tls_trust_store_unavailable"; return result;
   }
   std::unique_ptr<SSL, decltype(&SSL_free)> ssl(SSL_new(context.get()), SSL_free);
   if (!ssl) { result.error = "tls_session_failed"; return result; }
   SSL_set_fd(ssl.get(), socket.get());
+  if (SSL_set_tlsext_host_name(ssl.get(), parsed.host.c_str()) != 1) {
+    result.error = "tls_hostname_failed"; return result;
+  }
   if (SSL_set1_host(ssl.get(), parsed.host.c_str()) != 1) {
     result.error = "tls_hostname_failed"; return result;
   }

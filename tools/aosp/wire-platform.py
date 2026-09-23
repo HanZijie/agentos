@@ -192,6 +192,19 @@ def main():
                 content = content.rstrip() + "\n" + line + "\n"
         changes[path] = content
 
+    test_path = "system/sepolicy/contexts/plat_file_contexts_test"
+    content = read(test_path)
+    for line in (overlay / "system/agent/sepolicy/file_contexts_test").read_text().splitlines():
+        fields = line.split()
+        if not fields or line.startswith("#"):
+            continue
+        existing = [row.split() for row in content.splitlines() if row.split()[:1] == fields[:1]]
+        if existing and any(row != fields for row in existing):
+            raise ValueError(f"Conflicting SELinux context test: {fields[0]}")
+        if not existing:
+            content = content.rstrip() + "\n" + line + "\n"
+    changes[test_path] = content
+
     product_paths = (["device/google/cuttlefish/shared/device.mk"] if args.target == "cuttlefish"
                      else ["device/google/shusky/aosp_shiba.mk"])
     for path in product_paths:

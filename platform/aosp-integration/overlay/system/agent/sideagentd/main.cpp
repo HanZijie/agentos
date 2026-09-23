@@ -515,7 +515,11 @@ class Sideagentd final : public BnSideagentd {
                                                << ",\"message\":" << JsonString(request.error_message) << "}";
       json << '}';
     }
-    json << "]}";
+    json << "],\"selection\":";
+    auto selected = std::find_if(value.events.rbegin(), value.events.rend(), [](const Event& event) {
+      return event.json.find("\"eventType\":\"session.selected\"") != std::string::npos;
+    });
+    json << (selected == value.events.rend() ? "null" : selected->json) << '}';
     out_snapshot->sessionId = session_id;
     out_snapshot->currentSequence = value.sequence;
     out_snapshot->json = json.str();

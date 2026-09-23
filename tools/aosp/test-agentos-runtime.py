@@ -91,6 +91,7 @@ def provision(adb: str, serial: str, values: dict[str, str]) -> None:
     # ADB root is expected on a userdebug Cuttlefish image. The secret file is
     # deleted by the caller after the test and never enters the repo/image zip.
     require(run(adb, serial, ["root"], timeout=20), "adb root")
+    require(run(adb, serial, ["wait-for-device"], timeout=30), "adb reconnect")
     require(run(adb, serial, ["shell", "mkdir", "-p", "/data/agent/secrets"], timeout=10),
             "secret directory")
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as stream:
@@ -157,7 +158,9 @@ def main() -> int:
                         args.marker in str(item.get("latestAnswer", ""))
                         for item in lines for task in item.get("tasks", [])
                         if isinstance(task, dict))
-        if result.returncode != 0 or not completed:
+        jev_used = any(isinstance(item.get("selection"), dict) and
+                       item["selection"].get("method") == "jev" for item in lines)
+        if result.returncode != 0 or not completed or not jev_used:
             raise RuntimeError("runtime-test did not return the expected completed marker")
         report["checks"]["jev_and_minimax"] = "PASS"
 

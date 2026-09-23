@@ -39,6 +39,7 @@ FIXTURE_FILES = {
         "/system/bin/existing u:object_r:existing_exec:s0\n",
     "system/sepolicy/private/service_contexts":
         "existing u:object_r:existing_service:s0\n",
+    "system/sepolicy/contexts/plat_file_contexts_test": "/system/bin/existing existing_exec\n",
     "device/google/cuttlefish/shared/device.mk": "PRODUCT_PACKAGES += existing\n",
 }
 
@@ -108,6 +109,9 @@ class WirePlatformTest(unittest.TestCase):
         service_bp = (self.root / "frameworks/base/services/core/Android.bp").read_text()
         self.assertIn('"//system/agent:agentos_system_aidl-V3-java"', service_bp)
         self.assertIn('"existing-library"', service_bp)
+        context_tests = (self.root / "system/sepolicy/contexts/plat_file_contexts_test").read_text()
+        self.assertIn('/data/agent/secrets/agent.env sideagentd_secret_file', context_tests)
+        self.assertIn('/system/bin/existing existing_exec', context_tests)
         server = (self.root / "frameworks/base/services/java/com/android/server/"
                   "SystemServer.java").read_text()
         self.assertEqual(server.count("startService(AgentManagerService.class)"), 1)

@@ -251,7 +251,7 @@ void NativeRuntimeWorker::Run(RuntimeTask task,
   }
   if (response.status < 200 || response.status >= 300 || response.body.empty()) {
     Emit(RuntimeEvent{task.session_id, task.task_id, task.request_id, "failed", "",
-                      ErrorCodeForHttp(response), "MiniMax request failed"});
+                      ErrorCodeForHttp(response), "MiniMax request failed (" + response.error + ")"});
     return;
   }
   const std::string answer = FindStringValues(response.body, "text", false);
