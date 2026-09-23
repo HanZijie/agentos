@@ -39,7 +39,7 @@ cc_binary {
         "libbase",
         "libbinder_ndk",
     ],
-    static_libs: ["agentos_system_aidl-ndk"],
+    static_libs: ["agentos_system_aidl-V3-ndk"],
     init_rc: ["init/sideagentd.rc"],
     // The init rc uses /system/bin/sideagentd. Keep this system-installed
     // until a product-specific path is selected and recorded in the rc.

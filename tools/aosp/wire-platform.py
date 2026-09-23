@@ -135,13 +135,15 @@ def main():
 
     service_bp = "frameworks/base/services/core/Android.bp"
     content = read(service_bp).replace('"agentos_system_aidl-V1-java"',
-                                      '"//system/agent:agentos_system_aidl-java"')
+                                      '"//system/agent:agentos_system_aidl-V3-java"')
     content = content.replace('"//system/agent:agentos_system_aidl-V2-java"',
-                              '"//system/agent:agentos_system_aidl-java"')
-    if '"//system/agent:agentos_system_aidl-java"' not in content:
+                              '"//system/agent:agentos_system_aidl-V3-java"')
+    content = content.replace('"//system/agent:agentos_system_aidl-java"',
+                              '"//system/agent:agentos_system_aidl-V3-java"')
+    if '"//system/agent:agentos_system_aidl-V3-java"' not in content:
         start = content.index('name: "services.core.unboosted"')
         end = content.index("    static_libs: [", start) + len("    static_libs: [")
-        content = content[:end] + '\n        "//system/agent:agentos_system_aidl-java",' + content[end:]
+        content = content[:end] + '\n        "//system/agent:agentos_system_aidl-V3-java",' + content[end:]
     changes[service_bp] = content
 
     server = "frameworks/base/services/java/com/android/server/SystemServer.java"
