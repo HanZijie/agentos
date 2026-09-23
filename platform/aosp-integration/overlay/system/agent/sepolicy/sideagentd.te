@@ -12,6 +12,7 @@ allow sideagentd sideagentd_data_file:file create_file_perms;
 allow sideagentd sideagentd_data_file:dir { add_name remove_name write search getattr open };
 allow sideagentd sideagentd_data_file:file { create open read write getattr rename unlink setattr };
 allow sideagentd sideagentd_secret_file:file { open read getattr };
+allow sideagentd sideagentd_secret_file:dir { search getattr open read };
 binder_use(sideagentd)
 add_service(sideagentd, sideagent_service)
 allow system_server sideagent_service:service_manager find;
