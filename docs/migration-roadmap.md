@@ -11,11 +11,13 @@
 - [x] 把 Agent Bus 和输出事件协议固化成版本化协议文档。
 - [x] 定义任务状态、错误分类、取消和重连语义。
 - [x] 冻结 Session 状态、调度、公平性、并发、恢复和 Plugin capability lease 契约。
+- [x] 冻结 Session 自动选择契约：per-user 30 分钟活跃池、最近 20 个冷候选补足、254 + `new_session` Choice、Brief、Jev token 预算、分阶段选择和安全回退（[session-selection-v1](../system/agent/contracts/session-selection-v1.md)）。
 - [x] 冻结 Plugin 运行时注入契约：manifest 发现、per-user 启用、按需绑定/解冻、握手、tool 调用、resource 的 system reminder 注入（[plugin-injection-v1](../system/agent/contracts/plugin-injection-v1.md)）。
 
 ## M1：sideagentd 骨架
 
 - [x] 添加独立的 Session Store、Session Scheduler 和 Worker 参考实现（无 Binder、无真实模型）。
+- [x] 添加 SessionSelector、Jev Choice HTTP adapter 和 `submitAutoInput` 参考实现；密钥只从未跟踪的运行时配置读取，真实设备注入和镜像验证待完成。
 - [~] 添加最小 daemon 可执行文件和健康接口（AOSP bootstrap overlay 已提供，待目标分支编译）。
 - [~] 添加 init service 描述和独立 SELinux domain（overlay 和 AID/产品/平台策略接线已保存，待目标构建、neverallow 和启动验证）。
 - [~] 注册稳定 Binder 服务（`agentos.sideagentd` health service 已定义，待 AOSP service manager 验证）。
@@ -32,6 +34,7 @@
 
 - [x] 在 Scheduler 参考实现中验证事件日志、per-session sequence 和 Snapshot + afterSequence 恢复。
 - [ ] 将参考实现的 Store 接入系统 daemon 的正式生命周期。
+- [ ] 将 Session 自动选择接入稳定 Binder/AIDL，完成真实 Jev secret 注入、超时/回退诊断和多用户系统测试。
 - [ ] 把 Task Store 从原型 JSON 文件迁移到 SQLite/WAL。
 - [ ] 为副作用工具增加 operation record 和幂等键。
 

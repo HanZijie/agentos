@@ -93,6 +93,47 @@ JSON-RPC 请求：
 
 ## 3. Session 方法
 
+### 3.0 自动选择已有 Session
+
+前端没有可靠的当前 `sessionId` 时，可以提交 `session/prompt-auto`。生产
+Binder 连接中的 `userId` 来自调用身份，不由 JSON 自己声明；reference
+transport 才允许显式 test identity。
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "4-auto",
+  "method": "session/prompt-auto",
+  "params": {
+    "clientRequestId": "request-456",
+    "content": [{"type": "text", "text": "继续处理刚才的构建问题"}]
+  }
+}
+```
+
+`sideagentd` 从本用户 30 分钟活跃池生成候选 Brief，调用 Jev Choice，并
+严格校验返回的 `choiceId`。返回值仍然只是 durable enqueue receipt，并增加
+选择证据：
+
+```json
+{
+  "accepted": true,
+  "sessionId": "session-123",
+  "taskId": "task-001",
+  "selection": {
+    "choiceId": "session-123",
+    "created": false,
+    "selectionMethod": "jev"
+  }
+}
+```
+
+固定 `choiceId = "new_session"` 会先创建 Session，再把同一个请求入队。
+Jev 未配置、超时、服务错误、输入预算不足或返回非法 id 时，服务端安全地
+选择该固定入口，并在 `selection.fallbackReason` 中报告原因；不会把输入
+写入其他用户的 Session。候选池和 Brief 的完整规则见 [Session Selection
+Contract v1](session-selection-v1.md)。
+
 ### 3.1 创建 Session
 
 ```json

@@ -49,6 +49,7 @@ Pixel 8 真机仍未刷写，因此不能把整条真机路线标为 Ready。
 - [~] `PRODUCT_PACKAGES` 已由 Cuttlefish/Pixel 8 target 接线脚本加入 sideagentd；系统前端尚未实现为可安装产品组件。
 - [ ] 数据目录：`/data/agent/<user>/` 目录创建、属主与标签（配合 §2）。
 - [x] Binder 服务注册：`service list` 同时出现 `agentos` 与 `agentos.sideagentd`，`cmd agentos health` 返回 `state=ready`。
+- [ ] Jev secret 注入：为迁移后的 sideagentd 设计受 SELinux/UID 保护的运行时 secret 文件或 SecretStore；不能把用户 API key 写入 Git、通用镜像或诊断输出。当前 overlay 仍只有 health service，未宣称已支持 Session 选择。
 
 ## 2. SELinux
 

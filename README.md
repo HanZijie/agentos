@@ -51,6 +51,7 @@ Agent 的事实来源是系统侧 Session 和事件日志，不是某个 Activit
 ```text
 createSession(userId, frontendId)
 submitInput(sessionId, requestId, input)
+submitAutoInput(userId, requestId, input)   # sideagentd 选择已有/最近冷 Session 或新建
 subscribeOutput(sessionId, afterSequence)
 cancelTask(requestId)
 getSnapshot(sessionId)
@@ -122,6 +123,6 @@ Android 原型的设备测试仍使用本地 `Pixel_8a` AVD。系统组件的编
 6. 迁移 Task Store、Session Store、Pi Runtime 和 Plugin Broker。
 7. 移除 App 内 Agent 宿主，只保留前端和兼容测试。
 
-每个阶段都必须能独立启动、检查和回滚。系统接口的设计文档见 [system-architecture.md](docs/system-architecture.md)，前端和系统之间的逻辑协议见 [agent-bus-v1.md](system/agent/contracts/agent-bus-v1.md)，Session 调度契约见 [session-scheduling-v1.md](system/agent/contracts/session-scheduling-v1.md)，迁移清单见 [migration-roadmap.md](docs/migration-roadmap.md)。
+每个阶段都必须能独立启动、检查和回滚。系统接口的设计文档见 [system-architecture.md](docs/system-architecture.md)，前端和系统之间的逻辑协议见 [agent-bus-v1.md](system/agent/contracts/agent-bus-v1.md)，Session 调度契约见 [session-scheduling-v1.md](system/agent/contracts/session-scheduling-v1.md)，自动选择契约见 [session-selection-v1.md](system/agent/contracts/session-selection-v1.md)，迁移清单见 [migration-roadmap.md](docs/migration-roadmap.md)。
 
 默认 CI 只运行离线目录检查、Node 契约测试和按变更触发的 Android JVM/Lint 检查；它不会同步 AOSP、启动模拟器或构建系统镜像。平台镜像验证保留为后续手动 workflow。

@@ -147,6 +147,16 @@ npm run build --prefix pi-acp-adapter
 | SCH-09 | SQLite WAL 事务回滚、独占 owner、单调 sequence | 失败事务无半写状态；sequence 不重复、不倒退；第二 owner 被拒绝 |
 | SCH-10 | capability lease 绑定 Session 和 worker generation，lease 过期/撤销 | 新调用被拒；活动 Task 按取消流程结束；旧凭据不能跨 generation 使用 |
 
+Session 自动选择在 [`session-selection-v1.md`](../system/agent/contracts/session-selection-v1.md)
+中单独冻结，reference tests 还必须覆盖：
+
+| ID | 场景 | 预期结果 |
+| --- | --- | --- |
+| SEL-01 | 30 分钟边界、per-user 隔离、254 个已有 Session、最近候选补足 | active pool 严格移除过期项；选择请求最多 254 个已有候选，不足 20 个时补足 `stale` 冷候选，并始终追加 `new_session` |
+| SEL-02 | 首轮 query、AI final answer、最近两轮 query/answer | Brief 字段顺序稳定；输入 token 上界生效；Brief 只作为不可信证据 |
+| SEL-03 | Jev 返回已有 id、`new_session`、非法 id 或超时；长请求分阶段 | 精确 id 才能路由；固定入口创建新 Session；超预算时批量筛选后再决赛；错误安全回退且不跨用户写入 |
+| SEL-04 | API key、错误响应和诊断输出 | key 不进入 request body 以外的持久化数据、事件或日志；错误不回显 secret |
+
 ### 6.2 Plugin Broker 和 resource reminder
 
 | ID | 场景 | 预期结果 |

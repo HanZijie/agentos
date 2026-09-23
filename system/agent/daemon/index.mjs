@@ -1,21 +1,36 @@
 import { SessionStore } from './store.mjs';
 import { SessionScheduler } from './scheduler.mjs';
+import { ActiveSessionPool, SessionSelector } from './session-selector.mjs';
+import { JevClientError, JevHttpClient } from './jev-client.mjs';
 import { PluginBroker, validateDescriptor } from './plugin-broker.mjs';
 import { processWorkerFactory } from './workers/process-worker.mjs';
 
-export { SessionStore, SessionScheduler, PluginBroker, validateDescriptor };
+export {
+  SessionStore,
+  SessionScheduler,
+  ActiveSessionPool,
+  SessionSelector,
+  JevHttpClient,
+  JevClientError,
+  PluginBroker,
+  validateDescriptor,
+};
 
 /**
  * Creates the process-local sideagentd data plane. Android Binder and the
  * frontend protocol can call this interface later without owning scheduling.
  */
-export function createSideagentd({ dbPath, workerFactory = processWorkerFactory, config, now, retainEvents } = {}) {
+export function createSideagentd({ dbPath, workerFactory = processWorkerFactory, config, now, retainEvents,
+  jevModel, jev = {}, selectionConfig = {} } = {}) {
   if (!dbPath) throw new Error('dbPath is required');
   const store = new SessionStore(dbPath, { retainEvents });
-  const scheduler = new SessionScheduler(store, workerFactory, { config, now });
+  const model = jevModel ?? new JevHttpClient(jev);
+  const sessionSelector = new SessionSelector(store, { ...selectionConfig, now, model });
+  const scheduler = new SessionScheduler(store, workerFactory, { config, now, sessionSelector });
   return {
     store,
     scheduler,
+    sessionSelector,
     async shutdown() { await scheduler.shutdown(); store.close(); },
   };
 }

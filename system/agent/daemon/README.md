@@ -18,6 +18,34 @@ Plugin capability leases. A Worker owns only one assigned runtime attempt and
 returns events/results to the Scheduler. Pi never owns AgentOS event storage,
 recovery, frontend subscriptions, or deduplication.
 
+## Automatic Session selection
+
+`SessionSelector` builds a per-user view of Sessions active in the last 30
+minutes, keeps at most 254 existing Sessions, and appends the fixed
+`new_session` Choice. If fewer than 20 active Sessions exist, it can add the
+newest non-terminal Sessions as labelled `stale` cold candidates; those records
+are not active and do not extend the 30-minute TTL. It builds each candidate
+Brief from the first query, first/latest answer, and last two completed
+query/answer turns. The Jev adapter maps those candidates to the
+`/v1/systemone` Choice schema and accepts only an exact returned `choiceId`.
+When the complete request exceeds the configured input budget, Jev is called
+in bounded candidate stages and then once more over the stage winners plus
+`new_session`.
+
+`createSideagentd()` wires `JevHttpClient` by default. The API key is read from
+`AGENTOS_JEV_API_KEY` (or `TYPESAFE_API_KEY`) at process start; see
+`jev.env.example`. Missing keys, timeouts, provider errors, and invalid choices
+fall back to `new_session` and never block durable input enqueue. The actual
+Android native `sideagentd` in the AOSP overlay is still health-only; this is a
+reference data-plane implementation until the runtime is migrated.
+
+```js
+const receipt = await daemon.scheduler.submitAutoInput({
+  userId: 'user-0', cwd: '/workspace', clientRequestId: 'request-1',
+  prompt: [{ type: 'text', text: '继续处理构建问题' }],
+});
+```
+
 Run the prototype daemon:
 
 ```bash

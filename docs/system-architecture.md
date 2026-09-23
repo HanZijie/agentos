@@ -44,7 +44,7 @@ Plugin 应被理解为 App 运行时向 Agent 系统进程注入的运行时变�
 
 这个模型的核心工程难点是 Session 调度。调度器需要在多个 User、前端、Session、Plugin capability 和 Agent worker 之间处理排队、优先级、公平性、并发上限、取消、超时、背压、断线、Plugin death 和 daemon 重启恢复。Session Store、Task Store、事件 sequence 和 capability lease 都应围绕这些调度语义设计。
 
-上述语义由 [Session Scheduling Contract v1](../system/agent/contracts/session-scheduling-v1.md) 冻结。该契约将 Session 的状态机与 Task 的一次执行分开，并规定同一 Session 串行、不同 Session 受全局和 User 并发上限约束；实现可以替换 Scheduler 和 Store，但不能改变回执、事件顺序、Snapshot 恢复或 lease 撤销语义。
+上述语义由 [Session Scheduling Contract v1](../system/agent/contracts/session-scheduling-v1.md) 冻结。该契约将 Session 的状态机与 Task 的一次执行分开，并规定同一 Session 串行、不同 Session 受全局和 User 并发上限约束；实现可以替换 Scheduler 和 Store，但不能改变回执、事件顺序、Snapshot 恢复或 lease 撤销语义。输入未带 `sessionId` 时的选择语义由 [Session Selection Contract v1](../system/agent/contracts/session-selection-v1.md) 冻结：`sideagentd` 按 `userId` 维护 30 分钟活跃池，默认最多 254 个已有 Session；不足 20 个时以 `stale` 标记补足最近候选，加上固定 `new_session` 入口仍不超过 255 个 Jev Choice。
 
 ## 系统接口
 
@@ -60,6 +60,7 @@ Plugin 应被理解为 App 运行时向 Agent 系统进程注入的运行时变�
 
 - `createSession(userId, frontendId, options)`
 - `submitInput(sessionId, requestId, input)`
+- `submitAutoInput(userId, requestId, input)`（先用候选 Brief 选择已有 Session，或创建 `new_session`）
 - `cancelTask(requestId)`
 - `subscribeOutput(sessionId, afterSequence, sink)`
 - `getSnapshot(sessionId)`
@@ -118,7 +119,7 @@ Plugin 运行在提供它的 App UID 中。系统从 PackageManager 和 Binder c
 - 每个 User 有独立的 Session、任务和 Plugin 注册状态；
 - 用户停止时撤销前端订阅和 Plugin capability；
 - 用户解锁前只加载 Direct Boot 所需的最小恢复状态；
-- API key 和 OAuth credential 由 Keystore2 管理，不进入 system_server 日志或公共事件；
+- API key 和 OAuth credential 由 Keystore2 或 sideagentd 受保护的 SecretStore 管理，不进入 system_server 日志、公共事件或通用系统镜像；
 - 数据目录使用专用 SELinux label，不能让 sideagentd 直接读取其他用户的 app-private 目录。
 
 ## 诊断

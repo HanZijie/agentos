@@ -18,6 +18,8 @@ local.properties
 **/build/
 /.kotlin/
 /.env.anthropic.local
+/system/agent/daemon/jev.env
+/.local/jev.env
 /.idea/
 
 # AOSP is an external checkout; keep only its repository note here.
