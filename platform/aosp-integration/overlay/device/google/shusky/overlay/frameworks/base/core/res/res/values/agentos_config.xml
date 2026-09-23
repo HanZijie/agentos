@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="config_defaultAssistant" translatable="false">com.example.agenriod</string>
+    <integer name="config_longPressOnPowerBehavior">5</integer>
+    <bool name="config_longPressOnPowerForAssistantSettingAvailable">true</bool>
+</resources>

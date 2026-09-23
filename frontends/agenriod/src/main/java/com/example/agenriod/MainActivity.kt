@@ -1,9 +1,6 @@
 package com.example.agenriod
 
 import android.content.Intent
-import android.content.ComponentName
-import android.content.ServiceConnection
-import android.os.IBinder
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -85,7 +82,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
 import com.example.agenriod.agent.AgentUiState
 import com.example.agenriod.agent.AgentClient
-import com.example.agenriod.agent.AgentService
 import com.example.agenriod.agent.ChatMessage
 import com.example.agenriod.agent.ImageAttachment
 import com.example.agenriod.agent.PluginSummary
@@ -104,26 +100,16 @@ import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
     private lateinit var client: AgentClient
-    private var bound = false
-    private val connection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName, service: IBinder) { client.attach(service) }
-        override fun onServiceDisconnected(name: ComponentName) { client.detach() }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         client = AgentClient(applicationContext)
         setContent { AgenriodApp(client) }
-        val intent = Intent(this, AgentService::class.java)
-        ContextCompat.startForegroundService(this, intent)
-        bound = bindService(intent, connection, BIND_AUTO_CREATE)
     }
 
     override fun onDestroy() {
         client.close()
-        if (bound) unbindService(connection)
-        bound = false
         super.onDestroy()
     }
 }

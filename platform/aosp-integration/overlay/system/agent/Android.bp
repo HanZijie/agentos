@@ -1,4 +1,4 @@
-// Bootstrap overlay for the first AgentOS system slice.
+// Bootstrap overlay for the AgentOS system slice.
 // Add system/agent to PRODUCT_SOONG_NAMESPACES in the selected AOSP product.
 // This module is intentionally separate from the reference Node runtime in
 // the repository's system/agent/daemon directory.
@@ -12,7 +12,10 @@ aidl_interface {
     srcs: [
         "com/example/agentos/*.aidl",
     ],
-    frozen: true,
+    // The frontend/session methods are still being exercised on the target
+    // image. Keep the current surface buildable while the next API version is
+    // frozen.
+    frozen: false,
     stability: "vintf",
     versions_with_info: [
         {
@@ -36,7 +39,7 @@ cc_binary {
         "libbase",
         "libbinder_ndk",
     ],
-    static_libs: ["agentos_system_aidl-V2-ndk"],
+    static_libs: ["agentos_system_aidl-ndk"],
     init_rc: ["init/sideagentd.rc"],
     // The init rc uses /system/bin/sideagentd. Keep this system-installed
     // until a product-specific path is selected and recorded in the rc.

@@ -15,7 +15,17 @@ def main():
     parser.add_argument("aosp_root", type=Path)
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--target", choices=("cuttlefish", "pixel8"), default="cuttlefish")
+    parser.add_argument("--frontend-apk", type=Path,
+                        help="Gradle-built Agenriod APK to sign into the product image")
+    parser.add_argument("--notes-apk", type=Path,
+                        help="Gradle-built Notes Plugin APK to sign into the product image")
     args = parser.parse_args()
+    if (args.frontend_apk is None) != (args.notes_apk is None):
+        parser.error("--frontend-apk and --notes-apk must be supplied together")
+    if args.frontend_apk is not None:
+        for path, label in ((args.frontend_apk, "frontend APK"), (args.notes_apk, "Notes APK")):
+            if not path.is_file():
+                parser.error(f"{label} does not exist: {path}")
     root = args.aosp_root.resolve()
     manifest = root / ".repo/manifests/default.xml"
     revision = ET.parse(manifest).getroot().find("default").get("revision")
@@ -31,6 +41,7 @@ def main():
             parser.error(f"{project} HEAD does not match {revision}")
     overlay = Path(__file__).resolve().parents[2] / "platform/aosp-integration/overlay"
     changes = {}
+    binary_changes = {}
 
     def read(path):
         return changes[path] if path in changes else (root / path).read_text()
@@ -45,7 +56,34 @@ def main():
     for source in sorted(overlay.rglob("*")):
         if not source.is_file() or source.name == "README.md" or source.name.startswith("."):
             continue
-        changes[str(source.relative_to(overlay))] = source.read_text()
+        relative = str(source.relative_to(overlay))
+        if relative.startswith("device/google/cuttlefish/") and args.target != "cuttlefish":
+            continue
+        if relative.startswith("device/google/shusky/") and args.target != "pixel8":
+            continue
+        if relative.startswith("device/google/") and args.frontend_apk is None:
+            continue
+        # The product APKs are generated outside this repository. The module
+        # is copied only when both APKs are staged, so a daemon-only wiring
+        # remains buildable without generated frontend artifacts.
+        if relative == "system/agent/frontend/Android.bp" and args.frontend_apk is None:
+            continue
+        if relative == "system/agent/frontend/privapp-permissions-agentos.xml" and args.frontend_apk is None:
+            continue
+        if relative == "system/agent/frontend/default-permissions-agentos.xml" and args.frontend_apk is None:
+            continue
+        if relative.startswith("system/agent/frontend/prebuilt/"):
+            continue
+        changes[relative] = source.read_text()
+    if args.frontend_apk is not None:
+        for relative, source in (
+                ("system/agent/frontend/prebuilt/agenriod.apk", args.frontend_apk),
+                ("system/agent/frontend/prebuilt/agenriod-notes.apk", args.notes_apk)):
+            target = root / relative
+            if not target.is_file() or target.read_bytes() != source.read_bytes():
+                binary_changes[relative] = source
+        changes["system/agent/frontend/Android.bp"] = (
+            overlay / "system/agent/frontend/Android.bp").read_text()
     # Include the stable API checksum, while skipping macOS metadata above.
     for source in overlay.rglob(".hash"):
         changes[str(source.relative_to(overlay))] = source.read_text()
@@ -69,11 +107,13 @@ def main():
 
     service_bp = "frameworks/base/services/core/Android.bp"
     content = read(service_bp).replace('"agentos_system_aidl-V1-java"',
-                                      '"//system/agent:agentos_system_aidl-V2-java"')
-    if '"//system/agent:agentos_system_aidl-V2-java"' not in content:
+                                      '"//system/agent:agentos_system_aidl-java"')
+    content = content.replace('"//system/agent:agentos_system_aidl-V2-java"',
+                              '"//system/agent:agentos_system_aidl-java"')
+    if '"//system/agent:agentos_system_aidl-java"' not in content:
         start = content.index('name: "services.core.unboosted"')
         end = content.index("    static_libs: [", start) + len("    static_libs: [")
-        content = content[:end] + '\n        "//system/agent:agentos_system_aidl-V2-java",' + content[end:]
+        content = content[:end] + '\n        "//system/agent:agentos_system_aidl-java",' + content[end:]
     changes[service_bp] = content
 
     server = "frameworks/base/services/java/com/android/server/SystemServer.java"
@@ -90,6 +130,11 @@ def main():
     insert("frameworks/base/core/res/AndroidManifest.xml", permission, "</manifest>",
            '    <!-- @hide Only the system may bind AgentOS Plugin endpoints. -->\n'
            f'    <permission android:name="{permission}"\n'
+           '        android:protectionLevel="signature|privileged" />\n')
+    frontend_permission = "com.example.agentos.permission.ACCESS_AGENT"
+    insert("frameworks/base/core/res/AndroidManifest.xml", frontend_permission, "</manifest>",
+           '    <!-- @hide Only platform-signed AgentOS frontends may create sessions. -->\n'
+           f'    <permission android:name="{frontend_permission}"\n'
            '        android:protectionLevel="signature|privileged" />\n')
 
     # Merge into platform private policy; an unused directory in system/agent
@@ -114,8 +159,13 @@ def main():
                      else ["device/google/shusky/aosp_shiba.mk"])
     for path in product_paths:
         content = read(path)
-        for line in ("PRODUCT_SOONG_NAMESPACES += system/agent",
-                     "PRODUCT_PACKAGES += sideagentd"):
+        product_lines = ["PRODUCT_SOONG_NAMESPACES += system/agent",
+                         "PRODUCT_PACKAGES += sideagentd"]
+        if args.frontend_apk is not None:
+            product_lines.append("PRODUCT_PACKAGES += agenriod_frontend agenriod_notes")
+            product_lines.append("PRODUCT_PACKAGES += agenriod_frontend_privapp_permissions")
+            product_lines.append("PRODUCT_PACKAGES += agenriod_frontend_default_permissions")
+        for line in product_lines:
             if line not in content:
                 content += "\n" + line + "\n"
         # Both products install the AgentOS daemon under /system.  AOSP's
@@ -147,8 +197,18 @@ def main():
                 shutil.copy2(target, saved)
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(content)
-        print(f"Applied {len(changed)} files; previous files backed up under {backup}")
+        for path, source in binary_changes.items():
+            target = root / path
+            if target.exists():
+                saved = backup / path
+                saved.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(target, saved)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+        print(f"Applied {len(changed)} files and {len(binary_changes)} APKs; previous files backed up under {backup}")
     else:
+        if binary_changes:
+            print("Would stage: " + ", ".join(binary_changes))
         print(f"Dry run: {len(changed)} files would change. Use --apply after reviewing.")
 
 

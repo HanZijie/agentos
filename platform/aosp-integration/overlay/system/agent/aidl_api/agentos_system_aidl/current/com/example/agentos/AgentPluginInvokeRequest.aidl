@@ -15,15 +15,21 @@
 // independently updatable components of the system. If a device is shipped
 // with such a backward incompatible change, it has a high risk of breaking
 // later when a module using the interface is updated, e.g., Mainline modules.
+///////////////////////////////////////////////////////////////////////////////
 
 package com.example.agentos;
+
+/**
+ * A bounded tool invocation. Empty idempotencyKey means that the call has no
+ * external side effect; side-effecting tools must receive a non-empty key.
+ */
 @VintfStability
 parcelable AgentPluginInvokeRequest {
-  String pluginSessionId;
-  String leaseId;
-  String requestId;
-  String tool;
-  String argsJson;
-  String idempotencyKey;
-  long deadlineEpochMs;
+    String pluginSessionId;
+    String leaseId;
+    String requestId;
+    String tool;
+    String argsJson;
+    String idempotencyKey;
+    long deadlineEpochMs;
 }

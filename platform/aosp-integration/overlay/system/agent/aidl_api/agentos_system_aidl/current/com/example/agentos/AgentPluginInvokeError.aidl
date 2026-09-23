@@ -15,12 +15,15 @@
 // independently updatable components of the system. If a device is shipped
 // with such a backward incompatible change, it has a high risk of breaking
 // later when a module using the interface is updated, e.g., Mainline modules.
+///////////////////////////////////////////////////////////////////////////////
 
 package com.example.agentos;
+
+/** Typed seam error. code values are defined by Plugin Injection Contract v1. */
 @VintfStability
 parcelable AgentPluginInvokeError {
-  String code;
-  String message;
-  boolean retryable;
-  String dataJson;
+    String code;
+    String message;
+    boolean retryable;
+    String dataJson;
 }

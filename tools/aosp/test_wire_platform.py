@@ -101,11 +101,12 @@ class WirePlatformTest(unittest.TestCase):
         product = (self.root / "device/google/cuttlefish/shared/device.mk").read_text()
         self.assertIn("PRODUCT_PACKAGES += existing", product)
         self.assertIn("PRODUCT_PACKAGES += sideagentd", product)
+        self.assertFalse((self.root / "device/google/cuttlefish/shared/overlay").exists())
         self.assertIn("PRODUCT_SOONG_NAMESPACES += system/agent", product)
         self.assertIn("PRODUCT_ARTIFACT_PATH_REQUIREMENT_ALLOWED_LIST += system/bin/sideagentd",
                       product)
         service_bp = (self.root / "frameworks/base/services/core/Android.bp").read_text()
-        self.assertIn('"//system/agent:agentos_system_aidl-V2-java"', service_bp)
+        self.assertIn('"//system/agent:agentos_system_aidl-java"', service_bp)
         self.assertIn('"existing-library"', service_bp)
         server = (self.root / "frameworks/base/services/java/com/android/server/"
                   "SystemServer.java").read_text()
@@ -131,7 +132,7 @@ class WirePlatformTest(unittest.TestCase):
         backup_dirs = sorted((self.parent / "agentos-wiring-backups").iterdir())
         result = self.wire("--apply")
         self.assert_success(result)
-        self.assertIn("Applied 0 files;", result.stdout)
+        self.assertIn("Applied 0 files and 0 APKs;", result.stdout)
         self.assertEqual(self.snapshot(), before)
         self.assertEqual(sorted((self.parent / "agentos-wiring-backups").iterdir()), backup_dirs)
 
@@ -188,6 +189,32 @@ class WirePlatformTest(unittest.TestCase):
         self.assert_success(result)
         self.assertIn("would change", result.stdout)
         self.assertIn("+PRODUCT_PACKAGES += sideagentd", result.stdout)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_frontend_apks_are_staged_and_added_to_product(self):
+        frontend = self.parent / "agenriod-debug.apk"
+        notes = self.parent / "agenriod-notes-debug.apk"
+        frontend.write_bytes(b"frontend-apk")
+        notes.write_bytes(b"notes-apk")
+        result = self.wire("--apply", "--frontend-apk", str(frontend),
+                           "--notes-apk", str(notes))
+        self.assert_success(result)
+        self.assertEqual((self.root / "system/agent/frontend/prebuilt/agenriod.apk").read_bytes(),
+                         b"frontend-apk")
+        self.assertEqual((self.root / "system/agent/frontend/prebuilt/agenriod-notes.apk").read_bytes(),
+                         b"notes-apk")
+        self.assertTrue((self.root / "system/agent/frontend/Android.bp").is_file())
+        product = (self.root / "device/google/cuttlefish/shared/device.mk").read_text()
+        self.assertIn("PRODUCT_PACKAGES += agenriod_frontend agenriod_notes", product)
+        self.assertIn("PRODUCT_PACKAGES += agenriod_frontend_privapp_permissions", product)
+        self.assertIn("PRODUCT_PACKAGES += agenriod_frontend_default_permissions", product)
+        config = (self.root / "device/google/cuttlefish/shared/overlay/frameworks/base/core/res/res/values/agentos_config.xml").read_text()
+        self.assertIn("config_defaultAssistant", config)
+        before = self.snapshot()
+        repeat = self.wire("--apply", "--frontend-apk", str(frontend),
+                           "--notes-apk", str(notes))
+        self.assert_success(repeat)
+        self.assertIn("Applied 0 files and 0 APKs;", repeat.stdout)
         self.assertEqual(self.snapshot(), before)
 
 

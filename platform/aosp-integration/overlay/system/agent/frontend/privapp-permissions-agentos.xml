@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<permissions>
+    <privapp-permissions package="com.example.agenriod">
+        <permission name="com.example.agentos.permission.ACCESS_AGENT" />
+    </privapp-permissions>
+</permissions>

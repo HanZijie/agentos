@@ -103,6 +103,10 @@ def main() -> int:
     parser.add_argument("--stage", choices=STAGES, default="all")
     parser.add_argument("-j", "--jobs", type=int, default=0)
     parser.add_argument("--target", choices=("cuttlefish", "pixel8"), default="cuttlefish")
+    parser.add_argument("--frontend-apk", type=Path,
+                        help="Gradle-built Agenriod APK to install in the image")
+    parser.add_argument("--notes-apk", type=Path,
+                        help="Gradle-built Notes APK to install in the image")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -114,6 +118,8 @@ def main() -> int:
         checked(value, label)
     if args.jobs < 0:
         fail("--jobs cannot be negative")
+    if (args.frontend_apk is None) != (args.notes_apk is None):
+        fail("--frontend-apk and --notes-apk must be supplied together")
 
     out = (args.out_dir or root / "out-agentos").resolve()
     evidence = (args.evidence_dir or out / "evidence").resolve()
@@ -156,9 +162,13 @@ def main() -> int:
             return fail(f"stage {name} failed with exit {result}; see {log}")
 
     try:
-        stage("prepare", [sys.executable, str(repo_root /
+        prepare_command = [sys.executable, str(repo_root /
               "tools/aosp/wire-platform.py"), str(root),
-              "--target", args.target, "--apply"])
+              "--target", args.target, "--apply"]
+        if args.frontend_apk is not None:
+            prepare_command.extend(["--frontend-apk", str(args.frontend_apk.resolve()),
+                                    "--notes-apk", str(args.notes_apk.resolve())])
+        stage("prepare", prepare_command)
         stage("soong", "source build/envsetup.sh; lunch \"$TARGET_PRODUCT-$TARGET_RELEASE-$TARGET_BUILD_VARIANT\"; m nothing -j" + jobs)
         stage("build", "source build/envsetup.sh; lunch \"$TARGET_PRODUCT-$TARGET_RELEASE-$TARGET_BUILD_VARIANT\"; m -j" + jobs)
         if args.stage in ("all", "package"):

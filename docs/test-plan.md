@@ -215,6 +215,22 @@ Session 自动选择在 [`session-selection-v1.md`](../system/agent/contracts/se
 
 ## 8. 通过标准和发布门槛
 
+### 8.0 镜像内置前端验收
+
+先构建 `:frontends:agenriod:assembleDebug` 和 `:plugins:notes:assembleDebug`，再把两个 APK
+通过 `wire-platform.py --frontend-apk ... --notes-apk ... --apply` 接入目标 AOSP
+产品。刷入镜像后必须确认：
+
+- `com.example.agenriod` 位于产品分区并使用 platform signer；
+- `cmd role get-role-holders android.app.role.ASSISTANT --user 0` 返回 Agenriod；
+- `settings get secure assistant` 指向 Agenriod 的 VoiceInteraction service；
+- 长按电源键打开 VoiceInteraction session，Compose surface 出现并开始监听；
+- `cmd agentos plugins --user 0` 发现 Notes，启用后通过系统 endpoint 完成握手；
+- Agent session 的输入、事件订阅、snapshot 和取消经由 AgentManagerService 到达 sideagentd。
+
+当前 native sideagentd 没有随镜像提供模型 runtime；提交输入会明确返回
+`runtime_unavailable`。在 runtime 包、数据目录和恢复策略完成前，这一项只能算系统接线验收，不能算完整 Agent 功能验收。
+
 ### 8.1 Pull Request 门槛
 
 - L0 全部通过，`git diff --check` 无输出，生成的 `agenriod-agent.js` 无未提交差异。

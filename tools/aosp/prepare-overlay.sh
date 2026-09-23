@@ -26,6 +26,13 @@ fi
 overlay="$ROOT/platform/aosp-integration/overlay"
 while IFS= read -r -d '' source; do
   relative="${source#"$overlay/"}"
+  if [[ "$relative" == "system/agent/frontend/Android.bp" ||
+        "$relative" == system/agent/frontend/prebuilt/* ||
+        "$relative" == system/agent/frontend/privapp-permissions-agentos.xml ||
+        "$relative" == system/agent/frontend/default-permissions-agentos.xml ||
+        "$relative" == device/google/* ]]; then
+    continue
+  fi
   destination="$AOSP_ROOT/$relative"
   mkdir -p "$(dirname "$destination")"
   if [[ -e "$destination" ]]; then

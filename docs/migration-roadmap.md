@@ -42,9 +42,14 @@
 
 ## M4：前端迁移
 
-- [ ] 让 `frontends/agenriod` 只调用 AgentManagerService。
-- [ ] 移除前端对 Agent runtime、Task Store 和 Session Store 的所有权。
-- [ ] 保留 Compose、VoiceInteraction 和通知作为前端入口。
+- [~] `frontends/agenriod` 的主界面和 VoiceInteraction 已通过共享
+  `AgentManagerClient` 调用 AgentManagerService；旧 AgentService 仍保留为
+  测试兼容代码，未进入正常系统前端路径。
+- [~] 新建 Session、提交输入、取消、snapshot 和事件订阅已移到
+  `AgentManagerService → sideagentd`；native runtime 的持久化和模型执行仍待
+  正式 runtime 包接入。
+- [x] Compose、VoiceInteraction 和通知仍作为前端入口；默认 Assistant 和
+  长按电源键的产品资源 overlay 已加入 Cuttlefish/Pixel 8 接线。
 - [ ] 用一个最小非 Agenriod 前端验证多前端订阅。
 
 ## M5：Plugin Broker

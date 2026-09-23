@@ -15,16 +15,28 @@
 // independently updatable components of the system. If a device is shipped
 // with such a backward incompatible change, it has a high risk of breaking
 // later when a module using the interface is updated, e.g., Mainline modules.
+///////////////////////////////////////////////////////////////////////////////
 
 package com.example.agentos;
+
+import com.example.agentos.AgentPluginInvokeError;
+
+/**
+ * Exactly one terminal result for an invoke or resource request.
+ *
+ * status is "ok" or "error". For an error, error is populated. Resource
+ * responses use content/mimeType/generatedAtMs/truncated; tool responses use
+ * resultJson. Large attachment transport is intentionally deferred until the
+ * sideagentd storage and PFD handoff are wired.
+ */
 @VintfStability
 parcelable AgentPluginInvokeResult {
-  String requestId;
-  String status;
-  String resultJson;
-  com.example.agentos.AgentPluginInvokeError error;
-  String content;
-  String mimeType;
-  long generatedAtMs;
-  boolean truncated;
+    String requestId;
+    String status;
+    String resultJson;
+    AgentPluginInvokeError error;
+    String content;
+    String mimeType;
+    long generatedAtMs;
+    boolean truncated;
 }

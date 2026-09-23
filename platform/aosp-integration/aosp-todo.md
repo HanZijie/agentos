@@ -46,7 +46,7 @@ Pixel 8 真机仍未刷写，因此不能把整条真机路线标为 Ready。
 
 - [x] init rc：`sideagentd.rc` 已进入镜像并启动；运行时服务进程属主为 `sideagent` UID 1096。
 - [x] 专用 UID：Cuttlefish 中 `ps` 显示 `sideagent 1096 ... sideagentd`，不是 root/system。
-- [~] `PRODUCT_PACKAGES` 已由 Cuttlefish/Pixel 8 target 接线脚本加入 sideagentd；系统前端尚未实现为可安装产品组件。当前检查点先保留镜像外 APK，用于目标设备默认 Assistant 与电源键手势验证；镜像内置前端仍未开始接线。
+- [~] `PRODUCT_PACKAGES` 已由 Cuttlefish/Pixel 8 target 接线脚本加入 sideagentd。传入 `--frontend-apk` 与 `--notes-apk` 后，脚本还会将两个 APK 作为 platform-signed product 组件接入，并安装前端 privapp allowlist；完整镜像编译和设备验收仍待本轮验证。
 - [ ] 数据目录：`/data/agent/<user>/` 目录创建、属主与标签（配合 §2）。
 - [x] Binder 服务注册：`service list` 同时出现 `agentos` 与 `agentos.sideagentd`，`cmd agentos health` 返回 `state=ready`。
 - [~] native `sideagentd` 已增加 V2 Plugin session 注册、granted tool/resource
@@ -88,8 +88,8 @@ Pixel 8 真机仍未刷写，因此不能把整条真机路线标为 Ready。
   system_server → sideagentd capability session handoff 的 Java/native
   骨架已接通；Soong/设备编译验证、lease/deadline 校验、PFD attachment、
   Exactly-once 操作记录和 Plugin 端实现仍待接线。
-- [ ] `privapp-permissions` allowlist：系统前端与需要的系统组件（`frameworks/base/data/etc/` 或产品目录）。
-- [ ] 系统签名前端的访问控制：只向系统签名前端暴露控制接口。
+- [~] `privapp-permissions` allowlist：产品接线已加入 `agenriod_frontend_privapp_permissions`，完整镜像安装和权限检查仍待验证。
+- [x] 系统签名前端的访问控制：`ACCESS_AGENT` 为 `signature|privileged`，`AgentManagerService` 只允许获得该权限的前端创建 Session。
 - [ ] 设置页入口：Plugin 列表（manifest 锚点发现 + meta-data 摘要）与 per-user 启用开关。
 
 ## 5. 进程管理与 freezer（契约 §4 的平台保证）

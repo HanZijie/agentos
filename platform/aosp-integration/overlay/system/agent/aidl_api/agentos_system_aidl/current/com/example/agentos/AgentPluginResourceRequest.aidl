@@ -15,14 +15,17 @@
 // independently updatable components of the system. If a device is shipped
 // with such a backward incompatible change, it has a high risk of breaking
 // later when a module using the interface is updated, e.g., Mainline modules.
+///////////////////////////////////////////////////////////////////////////////
 
 package com.example.agentos;
+
+/** A bounded, read-only resource request using the same result sink as tools. */
 @VintfStability
 parcelable AgentPluginResourceRequest {
-  String pluginSessionId;
-  String leaseId;
-  String requestId;
-  String resource;
-  int maxBytes;
-  long deadlineEpochMs;
+    String pluginSessionId;
+    String leaseId;
+    String requestId;
+    String resource;
+    int maxBytes;
+    long deadlineEpochMs;
 }

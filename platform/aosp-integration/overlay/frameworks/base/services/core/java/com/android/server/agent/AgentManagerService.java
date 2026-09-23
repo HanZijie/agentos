@@ -33,10 +33,13 @@ import android.util.Slog;
 
 import com.android.server.SystemService;
 import com.example.agentos.AgentHealth;
+import com.example.agentos.AgentEnqueueResult;
 import com.example.agentos.AgentPluginCapabilities;
 import com.example.agentos.AgentPluginDescriptor;
 import com.example.agentos.AgentPluginHostInfo;
 import com.example.agentos.AgentPluginSession;
+import com.example.agentos.AgentSessionSnapshot;
+import com.example.agentos.IAgentEventCallback;
 import com.example.agentos.IAgentManager;
 import com.example.agentos.IAgentPluginEndpoint;
 import com.example.agentos.IAgentPluginHostCallback;
@@ -67,6 +70,8 @@ public final class AgentManagerService extends SystemService {
     public static final String ACTION_PLUGIN_ENDPOINT = "agentos.intent.action.PLUGIN_ENDPOINT";
     public static final String PERMISSION_BIND_AGENT_PLUGIN =
             "com.example.agentos.permission.BIND_AGENT_PLUGIN";
+    public static final String PERMISSION_ACCESS_AGENT =
+            "com.example.agentos.permission.ACCESS_AGENT";
     private static final String SIDED_SERVICE = "agentos.sideagentd";
     private static final int HANDSHAKE_TIMEOUT_MS = 5000;
     private final Handler mHandler;
@@ -528,6 +533,33 @@ public final class AgentManagerService extends SystemService {
             throw new SecurityException("AgentOS control is system-only");
     }
 
+    private void enforceFrontendCaller() {
+        int uid = Binder.getCallingUid();
+        if (uid == Process.SYSTEM_UID || uid == Process.ROOT_UID) return;
+        if (mPackageManager.checkUidPermission(PERMISSION_ACCESS_AGENT, uid)
+                != PackageManager.PERMISSION_GRANTED) {
+            throw new SecurityException("AgentOS frontend permission is required");
+        }
+    }
+
+    private int callingUserId() {
+        return UserHandle.getUserId(Binder.getCallingUid());
+    }
+
+    private boolean callerOwnsFrontendId(String frontendId) {
+        String[] packages = mPackageManager.getPackagesForUid(Binder.getCallingUid());
+        if (packages == null) return false;
+        for (String packageName : packages) if (frontendId.equals(packageName)) return true;
+        return false;
+    }
+
+    private ISideagentd requireSideagentd() {
+        ISideagentd daemon = ISideagentd.Stub.asInterface(
+                ServiceManager.checkService(SIDED_SERVICE));
+        if (daemon == null) throw new IllegalStateException("sideagentd is unavailable");
+        return daemon;
+    }
+
     private final class BinderService extends IAgentManager.Stub {
         @Override public AgentHealth getHealth() { enforceSystemCaller(); return health(); }
         @Override public String[] getDiscoveredPluginIds(int userId) {
@@ -542,6 +574,70 @@ public final class AgentManagerService extends SystemService {
         @Override public void setPluginEnabled(int userId, String pluginId, boolean enabled) {
             enforceSystemCaller();
             control(() -> { setEnabled(userId, pluginId, enabled); return null; });
+        }
+        @Override public String createSession(String frontendId, String metadataJson) {
+            enforceFrontendCaller();
+            if (frontendId == null || frontendId.isEmpty() || frontendId.length() > 128)
+                throw new IllegalArgumentException("frontendId is required");
+            if (!callerOwnsFrontendId(frontendId))
+                throw new SecurityException("frontendId must name a package owned by the caller");
+            try {
+                return requireSideagentd().createSession(callingUserId(), Binder.getCallingUid(), frontendId,
+                        metadataJson == null ? "{}" : metadataJson);
+            } catch (Exception e) {
+                throw new IllegalStateException("Agent session creation failed", e);
+            }
+        }
+        @Override public AgentEnqueueResult submitInput(String sessionId, String requestId,
+                String contentJson) {
+            enforceFrontendCaller();
+            if (sessionId == null || requestId == null || contentJson == null)
+                throw new IllegalArgumentException("sessionId, requestId and contentJson are required");
+            try {
+                return requireSideagentd().submitInput(callingUserId(), Binder.getCallingUid(), sessionId, requestId,
+                        contentJson);
+            } catch (Exception e) {
+                throw new IllegalStateException("Agent input failed", e);
+            }
+        }
+        @Override public void subscribeOutput(String sessionId, long afterSequence,
+                IAgentEventCallback callback) {
+            enforceFrontendCaller();
+            if (sessionId == null || callback == null)
+                throw new IllegalArgumentException("sessionId and callback are required");
+            try {
+                requireSideagentd().subscribeOutput(callingUserId(), Binder.getCallingUid(), sessionId, afterSequence,
+                        callback);
+            } catch (Exception e) {
+                throw new IllegalStateException("Agent output subscription failed", e);
+            }
+        }
+        @Override public void unsubscribeOutput(String sessionId, IAgentEventCallback callback) {
+            enforceFrontendCaller();
+            if (sessionId == null || callback == null) return;
+            try {
+                requireSideagentd().unsubscribeOutput(callingUserId(), Binder.getCallingUid(), sessionId, callback);
+            } catch (Exception e) {
+                Slog.w(TAG, "Agent output unsubscribe failed", e);
+            }
+        }
+        @Override public void cancelTask(String sessionId, String requestId) {
+            enforceFrontendCaller();
+            if (sessionId == null || requestId == null) return;
+            try {
+                requireSideagentd().cancelTask(callingUserId(), Binder.getCallingUid(), sessionId, requestId);
+            } catch (Exception e) {
+                throw new IllegalStateException("Agent task cancellation failed", e);
+            }
+        }
+        @Override public AgentSessionSnapshot getSnapshot(String sessionId) {
+            enforceFrontendCaller();
+            if (sessionId == null) throw new IllegalArgumentException("sessionId is required");
+            try {
+                return requireSideagentd().getSnapshot(callingUserId(), Binder.getCallingUid(), sessionId);
+            } catch (Exception e) {
+                throw new IllegalStateException("Agent snapshot failed", e);
+            }
         }
         @Override public int getInterfaceVersion() { return IAgentManager.VERSION; }
         @Override public String getInterfaceHash() { return IAgentManager.HASH; }

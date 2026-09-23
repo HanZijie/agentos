@@ -15,11 +15,14 @@
 // independently updatable components of the system. If a device is shipped
 // with such a backward incompatible change, it has a high risk of breaking
 // later when a module using the interface is updated, e.g., Mainline modules.
+///////////////////////////////////////////////////////////////////////////////
 
 package com.example.agentos;
+
+/** Endpoint-to-host notifications for one active Plugin session. */
 @VintfStability
 interface IAgentPluginHostCallback {
-  oneway void notifyResourcesChanged(String pluginSessionId, in String[] resourceNames);
-  oneway void notifyCapabilitiesChanged(String pluginSessionId);
-  oneway void requestClose(String pluginSessionId, String reasonCode);
+    oneway void notifyResourcesChanged(String pluginSessionId, in String[] resourceNames);
+    oneway void notifyCapabilitiesChanged(String pluginSessionId);
+    oneway void requestClose(String pluginSessionId, String reasonCode);
 }

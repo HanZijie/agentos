@@ -7,6 +7,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="com.example.agentos.permission.ACCESS_AGENT" />
     <permission android:name="com.example.agenriod.permission.BIND_AGENT_PLUGIN" android:protectionLevel="signature" />
     <uses-permission android:name="com.example.agenriod.permission.BIND_AGENT_PLUGIN" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />

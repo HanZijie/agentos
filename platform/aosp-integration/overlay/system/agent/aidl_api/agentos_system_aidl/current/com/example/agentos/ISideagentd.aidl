@@ -15,14 +15,31 @@
 // independently updatable components of the system. If a device is shipped
 // with such a backward incompatible change, it has a high risk of breaking
 // later when a module using the interface is updated, e.g., Mainline modules.
+///////////////////////////////////////////////////////////////////////////////
 
 package com.example.agentos;
+
+import com.example.agentos.AgentHealth;
+import com.example.agentos.AgentEnqueueResult;
+import com.example.agentos.AgentPluginInvokeRequest;
+import com.example.agentos.AgentPluginResourceRequest;
+import com.example.agentos.AgentPluginSession;
+import com.example.agentos.AgentSessionSnapshot;
+import com.example.agentos.IAgentEventCallback;
+import com.example.agentos.IAgentPluginResultSink;
+
 @VintfStability
 interface ISideagentd {
-  com.example.agentos.AgentHealth getHealth();
-  void registerPluginSession(in com.example.agentos.AgentPluginSession session);
-  oneway void unregisterPluginSession(String pluginSessionId, String reason);
-  oneway void beginInvoke(in com.example.agentos.AgentPluginInvokeRequest request, com.example.agentos.IAgentPluginResultSink sink);
-  oneway void beginReadResource(in com.example.agentos.AgentPluginResourceRequest request, com.example.agentos.IAgentPluginResultSink sink);
-  oneway void cancelInvoke(String pluginSessionId, String requestId);
+    AgentHealth getHealth();
+    void registerPluginSession(in AgentPluginSession session);
+    oneway void unregisterPluginSession(String pluginSessionId, String reason);
+    oneway void beginInvoke(in AgentPluginInvokeRequest request, IAgentPluginResultSink sink);
+    oneway void beginReadResource(in AgentPluginResourceRequest request, IAgentPluginResultSink sink);
+    oneway void cancelInvoke(String pluginSessionId, String requestId);
+    String createSession(int userId, int frontendUid, String frontendId, String metadataJson);
+    AgentEnqueueResult submitInput(int userId, int frontendUid, String sessionId, String requestId, String contentJson);
+    void subscribeOutput(int userId, int frontendUid, String sessionId, long afterSequence, IAgentEventCallback callback);
+    void unsubscribeOutput(int userId, int frontendUid, String sessionId, IAgentEventCallback callback);
+    void cancelTask(int userId, int frontendUid, String sessionId, String requestId);
+    AgentSessionSnapshot getSnapshot(int userId, int frontendUid, String sessionId);
 }

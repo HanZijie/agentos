@@ -1,13 +1,10 @@
 package com.example.agenriod.voice
 
 import android.Manifest
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.os.IBinder
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -29,7 +26,6 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.example.agenriod.agent.AgentClient
-import com.example.agenriod.agent.AgentService
 import com.example.agenriod.ui.SiriAssistantSurface
 import com.example.agenriod.ui.theme.AgenriodTheme
 
@@ -42,7 +38,6 @@ private class AgenriodVoiceSession(private val sessionContext: Context) : VoiceI
     private val client = AgentClient(sessionContext)
     private var assistantView: ComposeView? = null
     private var viewLifecycleOwner: SessionLifecycleOwner? = null
-    private var bound = false
     private var listening by mutableStateOf(false)
     private var voiceHint by mutableStateOf("")
     private var recognizer: SpeechRecognizer? = null
@@ -51,20 +46,7 @@ private class AgenriodVoiceSession(private val sessionContext: Context) : VoiceI
         putExtra(RecognizerIntent.EXTRA_LANGUAGE, "zh-CN")
         putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
     }
-    private val connection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName, service: IBinder) {
-            client.attach(service)
-            bound = true
-        }
-
-        override fun onServiceDisconnected(name: ComponentName) {
-            bound = false
-            client.detach()
-        }
-    }
-
     override fun onCreateContentView(): View {
-        ensureAgentBinding()
         return assistantView ?: ComposeView(sessionContext).also { view ->
             assistantView = view
             viewLifecycleOwner = SessionLifecycleOwner().also { owner ->
@@ -115,20 +97,8 @@ private class AgenriodVoiceSession(private val sessionContext: Context) : VoiceI
         viewLifecycleOwner = null
         assistantView?.disposeComposition()
         assistantView = null
-        if (bound) sessionContext.unbindService(connection)
-        bound = false
         client.close()
         super.onDestroy()
-    }
-
-    private fun ensureAgentBinding() {
-        if (bound) return
-        ContextCompat.startForegroundService(sessionContext, Intent(sessionContext, AgentService::class.java))
-        bound = sessionContext.bindService(
-            Intent(sessionContext, AgentService::class.java),
-            connection,
-            Context.BIND_AUTO_CREATE,
-        )
     }
 
     private fun toggleListening() {

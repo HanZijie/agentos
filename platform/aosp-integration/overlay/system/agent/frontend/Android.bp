@@ -1,0 +1,39 @@
+// APKs are staged into this directory by wire-platform.py from Gradle output.
+// AOSP signs both packages with the platform certificate while assembling the
+// image; the repository does not carry generated APK binaries.
+android_app_import {
+    name: "agenriod_frontend",
+    apk: "prebuilt/agenriod.apk",
+    certificate: "platform",
+    privileged: true,
+    product_specific: true,
+    dex_preopt: {
+        enabled: false,
+    },
+}
+
+android_app_import {
+    name: "agenriod_notes",
+    apk: "prebuilt/agenriod-notes.apk",
+    certificate: "platform",
+    product_specific: true,
+    dex_preopt: {
+        enabled: false,
+    },
+}
+
+prebuilt_etc {
+    name: "agenriod_frontend_privapp_permissions",
+    src: "privapp-permissions-agentos.xml",
+    sub_dir: "permissions",
+    filename_from_src: true,
+    product_specific: true,
+}
+
+prebuilt_etc {
+    name: "agenriod_frontend_default_permissions",
+    src: "default-permissions-agentos.xml",
+    sub_dir: "default-permissions",
+    filename_from_src: true,
+    product_specific: true,
+}

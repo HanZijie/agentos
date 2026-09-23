@@ -15,7 +15,7 @@ AOSP 的第一阶段 overlay 位于 [`platform/aosp-integration/overlay/`](../..
 
 这些是已保存的代码，尚未构成已验证的 AgentOS 系统。本轮新主机环境已记录，官方 stock Cuttlefish build `16373615` 的 image/host 包已备份并校验到仓库外 `../.local/aosp-artifacts/2026-09-22-rebuild/fallback/`；其启动尚未完成，且 stock 包不含 AgentOS overlay。当前没有完成的 AgentOS 自定义镜像或 AgentOS 真机测试。构建中的镜像、日志和 manifest 用 `tools/aosp/backup-artifacts.py` 持续保留本地副本；验收状态见 [AOSP 全局 TODO](../../platform/aosp-integration/aosp-todo.md)。
 
-当前 native `sideagentd` 已增加 Plugin session 注册、授权名称检查和异步 invoke/resource 转发骨架，但尚未承载完整 Session/Plugin/MCP 参考实现。Plugin probe 只验证发现与握手，不能证明 MCP 或工具调用可用。控制面的同步握手即使超时也不能中止卡住的 Binder 调用，两个工作线程可能耗尽；完整 capability/lease 管道、Binder death 恢复及 freezer 矩阵仍待完成。
+当前 native `sideagentd` 已增加 Plugin session 注册、授权名称检查和异步 invoke/resource 转发，以及前端 Session 的创建、输入幂等、事件订阅、snapshot 和取消骨架。Plugin probe 只验证发现与握手，不能证明 MCP 或工具调用可用。前端 Binder 已从 VoiceInteraction 和主 Compose 入口接入 `AgentManagerService`；模型 Agent runtime 尚未作为受版本约束的 Android 产品模块打包，提交任务会返回 `runtime_unavailable`，直到该包和恢复策略完成。
 
 Session 调度契约见 [`contracts/session-scheduling-v1.md`](contracts/session-scheduling-v1.md)。实现前先通过该契约的 reference tests 验证串行 Session、跨 Session 并行、优先级公平、取消/超时、Snapshot 恢复和 Plugin capability lease 撤销。新输入的自动 Session 选择见 [`contracts/session-selection-v1.md`](contracts/session-selection-v1.md)：选择器在 `sideagentd` 内按 user 隔离 30 分钟活跃池，最多 254 个已有 Session；活跃候选不足时默认补足最近 20 个 `stale` 冷候选，并保留固定 `new_session` Choice。
 

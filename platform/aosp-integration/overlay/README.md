@@ -25,8 +25,10 @@ The first slice provides:
 ## Plugin endpoint protocol boundary
 
 `agentos_system_aidl` version 1 remains frozen for the discovery probe and
-existing control-plane clients. Version 2 appends the data-plane boundary
-without changing the version 1 transaction numbers:
+existing control-plane clients. Version 2 contains the Plugin data-plane
+boundary. The current development surface appends frontend Session methods;
+the AIDL module is temporarily unfrozen until those methods are frozen as the
+next public version. Version 2 transaction numbers remain unchanged:
 
 - `openPluginSessionV2` negotiates `AgentPluginHostInfo` and receives an
   `IAgentPluginHostCallback` binder;
@@ -68,10 +70,13 @@ before applying to a checkout with local changes. `prepare-overlay.sh` remains
 a copy-only helper and does not perform these platform modifications.
 
 The probe module is available to build explicitly as `AgentOsPluginProbe`;
-wiring does not include it in `PRODUCT_PACKAGES`. Its presence as source is not
-evidence of installation or successful discovery. Wiring fixture tests verify
-target selection, rejection of wrong revisions, idempotence and backups; they
-do not compile or boot Android.
+wiring does not include it in `PRODUCT_PACKAGES`. The Agenriod and Notes APKs
+are generated outside this repository; pass both paths with `--frontend-apk`
+and `--notes-apk` to stage them under `system/agent/frontend/prebuilt/` and add
+the product packages. Their presence as source or a staged prebuilt is not
+evidence of a successful image boot. Wiring fixture tests verify target
+selection, APK staging, rejection of wrong revisions, idempotence and backups;
+they do not compile or boot Android.
 
 As of 2026-09-22, official stock Cuttlefish build 16373615 image/host archives
 are verified locally under

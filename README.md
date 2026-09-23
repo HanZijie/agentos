@@ -6,7 +6,7 @@
 
 AgentOS 将 Agent 作为 Android 系统组件运行。Agent 由系统启动和监管，拥有自己的进程、持久化状态、权限边界和输出事件流；Android App 只是前端，可以创建 Session、提交输入和订阅输出。
 
-当前仓库处于系统化迁移阶段。`frontends/agenriod` 仍包含可运行的 Android 原型和嵌入式 Agent Host，用来保持已有行为和测试；新的系统宿主放在 `system/agent` 和 `platform`，后续会逐步把 Runtime、任务存储和 Plugin Broker 从原型 App 迁入 `sideagentd`。
+当前仓库处于系统化迁移阶段。`frontends/agenriod` 保留旧 Agent Host 作为测试兼容代码；正常系统镜像路径由 `AgentManagerService` 和 `sideagentd` 提供 Session、事件和 Plugin 路由。Runtime、任务存储和模型执行仍需按版本打包到 `sideagentd`，否则系统会对提交任务返回 `runtime_unavailable`。
 
 前端原型还提供了一个 Android 系统助理入口：将 Agenriod 设为默认数字助理后，设备支持的助理手势可以唤起 Siri 风格的 Compose surface。配置步骤、语音行为和电源键映射边界见 [`docs/assistant-frontend.md`](docs/assistant-frontend.md)。
 

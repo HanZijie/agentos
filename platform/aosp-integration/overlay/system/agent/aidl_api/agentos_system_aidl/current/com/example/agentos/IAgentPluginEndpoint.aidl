@@ -15,15 +15,31 @@
 // independently updatable components of the system. If a device is shipped
 // with such a backward incompatible change, it has a high risk of breaking
 // later when a module using the interface is updated, e.g., Mainline modules.
+///////////////////////////////////////////////////////////////////////////////
 
 package com.example.agentos;
+
+import com.example.agentos.AgentPluginDescriptor;
+import com.example.agentos.AgentPluginCapabilities;
+import com.example.agentos.AgentPluginHostInfo;
+import com.example.agentos.AgentPluginInvokeRequest;
+import com.example.agentos.AgentPluginResourceRequest;
+import com.example.agentos.IAgentPluginHostCallback;
+import com.example.agentos.IAgentPluginResultSink;
+
 @VintfStability
 interface IAgentPluginEndpoint {
-  com.example.agentos.AgentPluginDescriptor openPluginSession(String pluginSessionId, int userId, String hostVersion);
-  oneway void closePluginSession(String pluginSessionId, String reason);
-  com.example.agentos.AgentPluginDescriptor openPluginSessionV2(String pluginSessionId, in com.example.agentos.AgentPluginHostInfo hostInfo, com.example.agentos.IAgentPluginHostCallback hostCallback);
-  oneway void sessionGranted(String pluginSessionId, in com.example.agentos.AgentPluginCapabilities granted);
-  oneway void beginInvoke(in com.example.agentos.AgentPluginInvokeRequest request, com.example.agentos.IAgentPluginResultSink sink);
-  oneway void beginReadResource(in com.example.agentos.AgentPluginResourceRequest request, com.example.agentos.IAgentPluginResultSink sink);
-  oneway void cancelInvoke(String pluginSessionId, String requestId);
+    // V1 discovery handshake retained for existing clients. New hosts use
+    // openPluginSessionV2 so protocol negotiation and callbacks are explicit.
+    AgentPluginDescriptor openPluginSession(String pluginSessionId, int userId, String hostVersion);
+    oneway void closePluginSession(String pluginSessionId, String reason);
+
+    // Versioned handshake and asynchronous capability data plane.
+    AgentPluginDescriptor openPluginSessionV2(String pluginSessionId,
+            in AgentPluginHostInfo hostInfo, IAgentPluginHostCallback hostCallback);
+    oneway void sessionGranted(String pluginSessionId, in AgentPluginCapabilities granted);
+    oneway void beginInvoke(in AgentPluginInvokeRequest request, IAgentPluginResultSink sink);
+    oneway void beginReadResource(in AgentPluginResourceRequest request,
+            IAgentPluginResultSink sink);
+    oneway void cancelInvoke(String pluginSessionId, String requestId);
 }

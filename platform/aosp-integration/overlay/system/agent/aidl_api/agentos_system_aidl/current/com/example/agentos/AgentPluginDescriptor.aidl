@@ -15,13 +15,15 @@
 // independently updatable components of the system. If a device is shipped
 // with such a backward incompatible change, it has a high risk of breaking
 // later when a module using the interface is updated, e.g., Mainline modules.
+///////////////////////////////////////////////////////////////////////////////
 
 package com.example.agentos;
+
 @VintfStability
 parcelable AgentPluginDescriptor {
-  int protocolVersion;
-  String pluginId;
-  String packageName;
-  String displayName;
-  String descriptorJson;
+    int protocolVersion;
+    String pluginId;
+    String packageName;
+    String displayName;
+    String descriptorJson;
 }
