@@ -1,4 +1,8 @@
-# AgentOS
+<p align="center">
+  <img src="docs/assets/agentos-logo.png" alt="AgentOS logo" width="180">
+</p>
+
+<h1 align="center">AgentOS</h1>
 
 AgentOS 将 Agent 作为 Android 系统组件运行。Agent 由系统启动和监管，拥有自己的进程、持久化状态、权限边界和输出事件流；Android App 只是前端，可以创建 Session、提交输入和订阅输出。
 
