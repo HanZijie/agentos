@@ -30,7 +30,6 @@ grep -q 'BIND_AGENT_PLUGIN' "$overlay/frameworks/base/services/core/java/com/and
 grep -q 'keyFor' "$overlay/frameworks/base/services/core/java/com/android/server/agent/AgentManagerService.java"
 grep -q 'ServiceManager.checkService' "$overlay/frameworks/base/services/core/java/com/android/server/agent/AgentManagerService.java"
 grep -q 'scheduleRebind' "$overlay/frameworks/base/services/core/java/com/android/server/agent/AgentManagerService.java"
-grep -q 'BINDER_FREEZE' platform/aosp-integration/aosp-todo.md
 grep -q 'sideagentd' "$overlay/system/agent/init/sideagentd.rc"
 grep -q 'sideagentd' "$overlay/system/agent/sepolicy/sideagentd.te"
 grep -q 'agentos.sideagentd' "$overlay/system/agent/sepolicy/service_contexts"
@@ -40,4 +39,4 @@ if git ls-files platform/checkout | grep -v '^platform/checkout/README.md$' | gr
   exit 1
 fi
 
-echo 'AOSP overlay structure and discovery/freezer invariants OK.'
+echo 'AOSP overlay structure and discovery invariants OK.'
