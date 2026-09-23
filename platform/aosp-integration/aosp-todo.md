@@ -83,17 +83,17 @@ Pixel 8 真机仍未刷写，因此不能把整条真机路线标为 Ready。
 
 验证项（待验证假设，逐条回写结论）：
 
-- [ ] bind flags 决定基线行为：确认 system_server 以 `BIND_AUTO_CREATE`（不带 `BIND_WAIVE_PRIORITY`）持有的绑定，是否足以让 endpoint 进程保持非 cached、从而天然不进入 freezer 与 phantom 查杀范围。若成立，本节大部分改动退化为"选对 bind flags + 测试锁定"。
-- [ ] 冻结进程的同步 Binder 事务行为：验证目标版本上 sync transaction 对 frozen 进程是失败返回（`BR_FROZEN_REPLY`）并触发解冻，还是排队等待；确认 `CachedAppOptimizer` 与 binder driver（`BINDER_FREEZE`/`TXNS_PENDING`）的实际协同路径。这决定"binder 调用触发解冻"能否直接依赖。
-- [ ] 解冻到可服务的延迟：测量拉起/解冻 → onBind → 握手完成的耗时分布，确认契约把该延迟计入 deadline 的默认值（`handshakeTimeoutMs` 5000ms）是否现实。
-- [ ] phantom process killer 范围：确认 PPK 只针对 fork 子进程与超额 cached 进程；契约已禁止 Plugin fork 常驻子进程，验证 endpoint 主进程在 bound 状态下不受 `max_phantom_processes` 影响。
+- [x] bind flags 基线已在真实 Cuttlefish Probe 上验证：启用 session 期间进程保持 bound、`cached=false`，12 秒采样未冻结。
+- [~] 冻结后的重新绑定已验证：空闲 Probe 自然冻结后，重新 enable 在约 3.6 秒内恢复 active；仍需专门验证冻结期间同步 Binder 事务的 driver 返回语义。
+- [x] 重新 enable → onBind → 握手完成已测得 3.6 秒，低于当前 5 秒握手超时；需要更多设备/负载样本。
+- [~] Probe 主进程在 bound session 和冻结/恢复路径中通过；phantom process killer 的专门 fork 子进程矩阵仍未完成。
 
 修改项（按验证结论裁剪）：
 
 - [ ] `CachedAppOptimizer`（`frameworks/base/services/core/java/com/android/server/am/`）：如 bound 状态不足以豁免，增加 agent capability session 期间的冻结豁免或 `unfreezeTemporarily` 挂钩。
 - [ ] `PhantomProcessList` / `OomAdjuster`：如验证发现 bound endpoint 进程仍可能被降级或查杀，为活跃 capability session 增加豁免；否则不改。
 - [ ] `device_config`（namespace `activity_manager`）：确定 `cached_apps_freezer`、`max_phantom_processes` 等键在目标设备上的默认值，测试矩阵覆盖开/关两种状态。
-- [ ] 空闲回收端到端：unbind → 进程进入 cached/frozen/被杀 → 下次需要重新拉起 + 新 `pluginSessionId` + 新 lease（契约 §13 测试 4 的平台版）。
+- [x] 空闲回收端到端已通过：unbind → 自然冻结 → enable 产生新 session；强杀后产生新 PID、新 session 并恢复 active。
 
 ## 6. 诊断
 
@@ -106,10 +106,11 @@ Pixel 8 真机仍未刷写，因此不能把整条真机路线标为 Ready。
 - [x] AgentOS 自定义 sideagentd、SELinux 标签、Binder 注册和 system_server health 运行验证。
 - [ ] 固化 Ubuntu 24.04 ready 容器的依赖与 Dockerfile，并完成干净主机复现；当前现场镜像需保留。
 - [ ] 多用户：user start/stop/unlock 的 Session 与 lease 撤销语义。
-- [~] Plugin 端到端已完成 manifest 发现 → 启用 → 按需 bind → 握手；tool 调用、resource 注入和 binder death 撤销仍待完成。
-- [ ] freezer 矩阵：§5 全部验证项在 freezer 开/关两种配置下通过。
+- [~] Plugin 端到端已完成 manifest 发现 → 启用 → 按需 bind → 握手 → 禁用 → Binder death 重连 → 用户删除清理；tool/resource 调用和 capability lease 仍待完成。
+- [~] Probe 生命周期已覆盖 freezer 开/关、自然冻结、重绑定、Binder death 和 user 10 删除；Binder driver 细节与 phantom fork 矩阵仍待补齐。
 - [x] 平台镜像手动构建完成；最终证据和镜像 SHA-256 已保存，默认 PR CI 仍不构建 AOSP。
 - [~] 自定义镜像 hash、构建日志、运行时 health/plugin/freezer 证据已备份到 `.local/aosp-artifacts/2026-09-23-aosp-final/`；完整 AOSP 镜像仍只保留在服务器，销毁前还需做远端归档。
+- [~] 新建独立 checkout `/mnt/aosp-src/aosp-rerun-20260923` 已完成 r34 manifest、工具链、overlay 和选择性依赖同步；严格 Soong 分析仍在补齐 module SDK/平台项目，尚未生成第二份镜像。
 
 ## 依赖关系
 

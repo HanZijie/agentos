@@ -63,3 +63,10 @@ The natural-freezer probe was also run with the repository tool. It returned
 remained `false` for the 40-second window. This is an observation of the
 ordinary app prototype using its current low-priority binding; it is not proof
 that the target system-service binding will or will not be freezer-exempt.
+
+The follow-up lifecycle run used the real `AgentOsPluginProbe` APK and passed the
+service-only lifecycle matrix: enabled binding stayed unfrozen, disable revoked
+the session, idle state naturally froze, re-enable created a new session, killing
+the endpoint produced a new PID and session, and a temporary user was removed
+without leaving an AgentOS grant. The report is in
+`.local/aosp-artifacts/2026-09-23-lifecycle/probe-run/report.json`.
