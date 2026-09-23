@@ -389,8 +389,8 @@ class Sideagentd final : public BnSideagentd {
     bool created = false;
     if (session_id.empty()) {
       std::string new_id;
-      const ScopedAStatus status = createSession(user_id, frontend_uid, frontend_id, metadata_json, &new_id);
-      if (!status.isOk()) return status;
+      ScopedAStatus status = createSession(user_id, frontend_uid, frontend_id, metadata_json, &new_id);
+      if (!status.isOk()) return std::move(status);
       session_id = new_id;
       created = true;
     }

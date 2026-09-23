@@ -41,26 +41,31 @@ bool ParseUrl(const std::string& input, Url* out) {
   if (path_start == std::string::npos) out->path = "/";
   else out->path = input.substr(path_start);
   if (out->path.find('#') != std::string::npos) return false;
-  try {
   if (authority.front() == '[') {
     const size_t close = authority.find(']');
     if (close == std::string::npos) return false;
     out->host = authority.substr(1, close - 1);
     if (close + 1 < authority.size()) {
       if (authority[close + 1] != ':') return false;
-      out->port = std::stoi(authority.substr(close + 2));
+      const std::string port_text = authority.substr(close + 2);
+      char* end = nullptr;
+      const long port = std::strtol(port_text.c_str(), &end, 10);
+      if (end == port_text.c_str() || *end != '\0') return false;
+      out->port = static_cast<int>(port);
     }
   } else {
     const size_t colon = authority.rfind(':');
     if (colon != std::string::npos && authority.find(':') == colon) {
       out->host = authority.substr(0, colon);
-      out->port = std::stoi(authority.substr(colon + 1));
+      const std::string port_text = authority.substr(colon + 1);
+      char* end = nullptr;
+      const long port = std::strtol(port_text.c_str(), &end, 10);
+      if (end == port_text.c_str() || *end != '\0') return false;
+      out->port = static_cast<int>(port);
     } else {
       out->host = authority;
     }
   }
-  } catch (...) {
-    return false;
   }
   if (out->host.empty() || out->port < 1 || out->port > 65535) return false;
   return true;
