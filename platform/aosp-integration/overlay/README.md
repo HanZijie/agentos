@@ -28,6 +28,11 @@ The native runtime slice provides:
 
 ## Plugin endpoint protocol boundary
 
+Frozen API integrity is checked by `tools/ci/check-aosp-overlay.sh` using the
+r34 hash algorithm. V2's checksum uses previous version `1`; the initial
+checksum incorrectly used `latest-version`. The corrected checksum is appended
+without changing any frozen interface definitions.
+
 `agentos_system_aidl` version 1 remains frozen for the discovery probe and
 existing control-plane clients. Version 2 contains the Plugin data-plane
 boundary. The current development surface appends frontend Session methods and

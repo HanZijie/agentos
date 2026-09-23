@@ -48,6 +48,25 @@ grep -q 'MINIMAX_API_KEY' "$overlay/system/agent/sideagentd/secret_store.cpp"
 grep -q 'task.recovery_required' "$overlay/system/agent/sideagentd/main.cpp"
 test -x tools/aosp/test-agentos-runtime.py
 
+python3 - <<'PY'
+from pathlib import Path
+import hashlib
+
+root = Path('platform/aosp-integration/overlay/system/agent/aidl_api/agentos_system_aidl')
+previous = 'latest-version'
+for version in sorted((p for p in root.iterdir() if p.name.isdigit()), key=lambda p: int(p.name)):
+    # Matches r34 system/tools/aidl/build/hash_gen.sh, including relative paths
+    # and the previous version number ("latest-version" only for version 1).
+    entries = ''.join(f'{hashlib.sha1(p.read_bytes()).hexdigest()}  ./{p.relative_to(version)}\n'
+                      for p in sorted(version.rglob('*.aidl')))
+    expected = hashlib.sha1((entries + previous + '\n').encode()).hexdigest()
+    actual = (version / '.hash').read_text().splitlines()[-1]
+    if actual != expected:
+        raise SystemExit(f'AIDL v{version.name} integrity mismatch: regenerate with r34 hash_gen.sh')
+    previous = version.name
+print('Frozen AgentOS AIDL hashes match the r34 algorithm.')
+PY
+
 if git ls-files platform/checkout | grep -v '^platform/checkout/README.md$' | grep -q .; then
   echo 'AOSP checkout must remain untracked' >&2
   exit 1
