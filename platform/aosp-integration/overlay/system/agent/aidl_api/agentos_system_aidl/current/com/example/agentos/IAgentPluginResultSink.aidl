@@ -15,14 +15,9 @@
 // independently updatable components of the system. If a device is shipped
 // with such a backward incompatible change, it has a high risk of breaking
 // later when a module using the interface is updated, e.g., Mainline modules.
-///////////////////////////////////////////////////////////////////////////////
 
 package com.example.agentos;
-
-import com.example.agentos.AgentPluginInvokeResult;
-
-/** Callback for exactly one terminal tool/resource result. */
 @VintfStability
 interface IAgentPluginResultSink {
-    oneway void onResult(in AgentPluginInvokeResult result);
+  void onResult(in com.example.agentos.AgentPluginInvokeResult result);
 }
