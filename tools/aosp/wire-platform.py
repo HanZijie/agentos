@@ -311,11 +311,11 @@ def main():
         elif "AgentOS power long press remains available during setup." not in guard:
             raise ValueError("PhoneWindowManager long-press setup guard changed unexpectedly")
 
-    # The stock assistant path delegates to SystemUI and intentionally refuses
-    # to launch while Setup Wizard is incomplete.  AgentOS is a development
-    # image with its own front-end Activity, so make the power gesture
-    # deterministic: wake the display and launch that Activity directly.  The
-    # short power press remains in the stock policy and is not changed.
+    # The stock assistant path delegates to SystemUI and refuses to launch
+    # while Setup Wizard is incomplete. AgentOS keeps the same Assistant route
+    # but sends it directly through SearchManager so SystemUI opens the
+    # registered VoiceInteractionSession (the Siri-style surface), even on a
+    # fresh development image. The short power press remains unchanged.
     # Small wiring fixtures used by the script tests do not materialize this
     # large framework source file; the real r34 checkout always does.
     if power_content is None:
@@ -352,17 +352,20 @@ def main():
             } else {
                 mPowerManager.userActivity(eventTime, false);
             }
-            final Intent intent = new Intent(Intent.ACTION_MAIN)
-                    .addCategory(Intent.CATEGORY_LAUNCHER)
-                    .setComponent(new ComponentName(\"com.example.agenriod\",
-                            \"com.example.agenriod.MainActivity\"))
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
-                            | Intent.FLAG_ACTIVITY_SINGLE_TOP
-                            | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-            startActivityAsUser(intent, null, UserHandle.CURRENT_OR_SELF,
-                    true /* allowDuringSetup */);
+            sendCloseSystemWindows(SYSTEM_DIALOG_REASON_ASSIST);
+            final Bundle args = new Bundle();
+            args.putLong(Intent.EXTRA_TIME, eventTime);
+            args.putInt(AssistUtils.INVOCATION_TYPE_KEY,
+                    AssistUtils.INVOCATION_TYPE_POWER_BUTTON_LONG_PRESS);
+            final SearchManager searchManager = mContext.getSystemService(SearchManager.class);
+            if (searchManager != null) {
+                searchManager.launchAssist(args);
+            } else {
+                final StatusBarManagerInternal statusBar = getStatusBarManagerInternal();
+                if (statusBar != null) statusBar.startAssist(args);
+            }
         } catch (RuntimeException e) {
-            Slog.e(TAG, \"Unable to launch AgentOS assistant Activity\", e);
+            Slog.e(TAG, \"Unable to launch AgentOS voice assistant session\", e);
         }
     }
 
