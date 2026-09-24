@@ -2,6 +2,7 @@
 
 #include <android/binder_manager.h>
 #include <android/binder_ibinder.h>
+#include <android/log.h>
 #include <aidl/com/example/agentos/IAgentManager.h>
 #include <aidl/com/example/agentos/BnAgentPluginResultSink.h>
 #include <aidl/com/example/agentos/AgentPluginSession.h>
@@ -40,13 +41,21 @@ class ResultSink final : public BnAgentPluginResultSink {
  public:
   ResultSink(int uid, std::string request) : uid_(uid), request_(std::move(request)) {}
   ndk::ScopedAStatus onResult(const AgentPluginInvokeResult& result) override {
-    if (AIBinder_getCallingUid() != static_cast<uid_t>(uid_) || result.requestId != request_)
+    const uid_t caller = AIBinder_getCallingUid();
+    __android_log_print(ANDROID_LOG_INFO, "sideagentd",
+                        "plugin result uid=%u expected=%d request_match=%d status=%s bytes=%zu",
+                        caller, uid_, result.requestId == request_, result.status.c_str(),
+                        result.resultJson.size());
+    if (caller != static_cast<uid_t>(uid_) || result.requestId != request_)
       return ndk::ScopedAStatus::fromExceptionCode(EX_SECURITY);
     std::lock_guard<std::mutex> guard(lock_);
     if (done_) return ndk::ScopedAStatus::ok();
     if (result.resultJson.size() > 128 * 1024) value_ = Error("result_too_large");
     else if (result.status != "ok") value_ = Error(result.error.code.c_str());
-    else if (!Parse(result.resultJson, &value_)) value_ = Error("invalid_plugin_result");
+    else if (!Parse(result.resultJson, &value_)) {
+      __android_log_print(ANDROID_LOG_ERROR, "sideagentd", "plugin result JSON parse failed");
+      value_ = Error("invalid_plugin_result");
+    }
     done_ = true;
     ready_.notify_all();
     return ndk::ScopedAStatus::ok();

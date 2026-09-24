@@ -3,6 +3,7 @@ package com.example.agentos.client
 import android.content.Context
 import android.os.Binder
 import android.util.AtomicFile
+import android.util.Log
 import com.example.agentos.*
 import org.json.JSONObject
 import java.io.File
@@ -15,6 +16,7 @@ open class SystemToolEndpoint(
     descriptorResource: Int,
     private val invoke: (String, JSONObject, String) -> JSONObject,
 ) : IAgentPluginEndpoint.Stub(), AutoCloseable {
+    private companion object { const val TAG = "AgentOSPluginEndpoint" }
     private val descriptorText = context.resources.openRawResource(descriptorResource)
         .bufferedReader().use { it.readText() }
     private val descriptor = JSONObject(descriptorText)
@@ -29,8 +31,15 @@ open class SystemToolEndpoint(
     private val executor = Executors.newSingleThreadExecutor()
     private val receipts = AtomicFile(File(context.filesDir, "agent-tool-receipts.json"))
 
-    private fun systemCaller() = check(Binder.getCallingUid() == 1000) { "System broker required" }
-    private fun runtimeCaller() = check(Binder.getCallingUid() == 1096) { "Native runtime required" }
+    private fun systemCaller() {
+        val uid = Binder.getCallingUid()
+        check(uid == 1000) { "System broker required" }
+    }
+    private fun runtimeCaller() {
+        val uid = Binder.getCallingUid()
+        Log.i(TAG, "runtime binder call uid=$uid pid=${Binder.getCallingPid()}")
+        check(uid == 1096) { "Native runtime required" }
+    }
 
     override fun openPluginSession(id: String, user: Int, version: String): AgentPluginDescriptor {
         systemCaller()
@@ -57,7 +66,9 @@ open class SystemToolEndpoint(
 
     override fun beginInvoke(request: AgentPluginInvokeRequest, sink: IAgentPluginResultSink) {
         runtimeCaller()
+        Log.i(TAG, "beginInvoke request=${request.requestId} tool=${request.tool}")
         executor.execute {
+            Log.i(TAG, "execute request=${request.requestId} tool=${request.tool}")
             val result = runCatching {
                 require(request.requestId.length in 1..512 && request.argsJson.length <= 65536) { "invalid_request" }
                 require(request.tool in sessions[request.pluginSessionId].orEmpty()) { "capability_denied" }
@@ -79,7 +90,9 @@ open class SystemToolEndpoint(
                     dataJson = "{}"
                 }
             }
+            Log.i(TAG, "reply request=${request.requestId} status=${reply.status} code=${reply.error.code}")
             runCatching { sink.onResult(reply) }
+                .onFailure { Log.e(TAG, "reply failed request=${request.requestId}", it) }
         }
     }
 
