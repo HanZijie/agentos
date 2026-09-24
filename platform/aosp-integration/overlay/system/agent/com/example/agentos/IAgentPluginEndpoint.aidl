@@ -19,11 +19,12 @@ interface IAgentPluginEndpoint {
     // Versioned handshake and asynchronous capability data plane.
     AgentPluginDescriptor openPluginSessionV2(String pluginSessionId,
             in AgentPluginHostInfo hostInfo, IAgentPluginHostCallback hostCallback);
-    void sessionGranted(String pluginSessionId, in AgentPluginCapabilities granted);
+    oneway void sessionGranted(String pluginSessionId, in AgentPluginCapabilities granted);
     oneway void beginInvoke(in AgentPluginInvokeRequest request, IAgentPluginResultSink sink);
     oneway void beginReadResource(in AgentPluginResourceRequest request,
             IAgentPluginResultSink sink);
     oneway void cancelInvoke(String pluginSessionId, String requestId);
     AgentPluginInvokeResult invokeSync(in AgentPluginInvokeRequest request);
     String invokeSyncJson(in AgentPluginInvokeRequest request);
+    void sessionGrantedSync(String pluginSessionId, in AgentPluginCapabilities granted);
 }

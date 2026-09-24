@@ -79,6 +79,10 @@ open class SystemToolEndpoint(
         if (sessions.containsKey(id)) sessions[id] = granted.grantedTools.toSet().intersect(toolEffects.keys)
     }
 
+    override fun sessionGrantedSync(id: String, granted: AgentPluginCapabilities) {
+        sessionGranted(id, granted)
+    }
+
     override fun closePluginSession(id: String, reason: String) {
         systemCaller()
         sessions.remove(id)

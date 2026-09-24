@@ -22,10 +22,11 @@ interface IAgentPluginEndpoint {
   com.example.agentos.AgentPluginDescriptor openPluginSession(String pluginSessionId, int userId, String hostVersion);
   oneway void closePluginSession(String pluginSessionId, String reason);
   com.example.agentos.AgentPluginDescriptor openPluginSessionV2(String pluginSessionId, in com.example.agentos.AgentPluginHostInfo hostInfo, com.example.agentos.IAgentPluginHostCallback hostCallback);
-  void sessionGranted(String pluginSessionId, in com.example.agentos.AgentPluginCapabilities granted);
+  oneway void sessionGranted(String pluginSessionId, in com.example.agentos.AgentPluginCapabilities granted);
   oneway void beginInvoke(in com.example.agentos.AgentPluginInvokeRequest request, com.example.agentos.IAgentPluginResultSink sink);
   oneway void beginReadResource(in com.example.agentos.AgentPluginResourceRequest request, com.example.agentos.IAgentPluginResultSink sink);
   oneway void cancelInvoke(String pluginSessionId, String requestId);
   com.example.agentos.AgentPluginInvokeResult invokeSync(in com.example.agentos.AgentPluginInvokeRequest request);
   String invokeSyncJson(in com.example.agentos.AgentPluginInvokeRequest request);
+  void sessionGrantedSync(String pluginSessionId, in com.example.agentos.AgentPluginCapabilities granted);
 }

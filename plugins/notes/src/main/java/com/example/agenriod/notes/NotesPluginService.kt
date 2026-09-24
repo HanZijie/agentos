@@ -54,6 +54,10 @@ class NotesPluginEndpoint(context: Context, private val mcp: JSONObject) : IAgen
         )
     }
 
+    override fun sessionGrantedSync(pluginSessionId: String, granted: AgentPluginCapabilities) {
+        sessionGranted(pluginSessionId, granted)
+    }
+
     override fun invokeSync(request: AgentPluginInvokeRequest): AgentPluginInvokeResult {
         val session = sessions[request.pluginSessionId]
             ?: return error(request.requestId, "unavailable", "Plugin session is not registered", true)

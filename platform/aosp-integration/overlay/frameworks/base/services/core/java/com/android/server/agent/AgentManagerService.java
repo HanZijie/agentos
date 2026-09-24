@@ -404,7 +404,7 @@ public final class AgentManagerService extends SystemService {
                                 try { AgentPluginCapabilities granted = new AgentPluginCapabilities();
                                       granted.grantedTools = record.session.grantedTools;
                                       granted.grantedResources = record.session.grantedResources;
-                                      endpoint.sessionGranted(sessionId, granted); }
+                                      endpoint.sessionGrantedSync(sessionId, granted); }
                                 catch (Exception e) { fail(record, this, "capability_grant_failed"); return; }
                             }
                             record.state = "active";
