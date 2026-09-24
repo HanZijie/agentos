@@ -46,6 +46,18 @@ class ResultSink final : public BnAgentPluginResultSink {
   ndk::ScopedAStatus onResultSync(const AgentPluginInvokeResult& result) override {
     return HandleResult(result);
   }
+
+  Json::Value Wait(const std::atomic<bool>* cancelled, bool* finished) {
+    std::unique_lock<std::mutex> guard(lock_);
+    auto until = std::chrono::steady_clock::now() + std::chrono::seconds(15);
+    while (!done_ && !(cancelled && cancelled->load()) && std::chrono::steady_clock::now() < until)
+      ready_.wait_for(guard, std::chrono::milliseconds(100));
+    *finished = done_;
+    if (done_) return value_;
+    done_ = true;
+    return Error(cancelled && cancelled->load() ? "cancelled" : "operation_unknown");
+  }
+
  private:
   ndk::ScopedAStatus HandleResult(const AgentPluginInvokeResult& result) {
     const uid_t caller = AIBinder_getCallingUid();
@@ -66,16 +78,6 @@ class ResultSink final : public BnAgentPluginResultSink {
     done_ = true;
     ready_.notify_all();
     return ndk::ScopedAStatus::ok();
-  }
-  Json::Value Wait(const std::atomic<bool>* cancelled, bool* finished) {
-    std::unique_lock<std::mutex> guard(lock_);
-    auto until = std::chrono::steady_clock::now() + std::chrono::seconds(15);
-    while (!done_ && !(cancelled && cancelled->load()) && std::chrono::steady_clock::now() < until)
-      ready_.wait_for(guard, std::chrono::milliseconds(100));
-    *finished = done_;
-    if (done_) return value_;
-    done_ = true;  // Late results cannot change the observed outcome.
-    return Error(cancelled && cancelled->load() ? "cancelled" : "operation_unknown");
   }
   int uid_;
   std::string request_;
