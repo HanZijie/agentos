@@ -147,7 +147,7 @@ def main():
         secret_content = read(secret_bp)
         secret_marker = 'name: "agentos_runtime_secret"'
         if secret_marker not in secret_content:
-            secret_content += '''\n\nprebuilt_etc {\n    name: "agentos_runtime_secret",\n    src: "prebuilt/agent.env",\n    filename: "agent.env",\n    sub_dir: "agentos",\n    mode: "0600",\n}\n'''
+            secret_content += '''\n\nprebuilt_etc {\n    name: "agentos_runtime_secret",\n    src: "prebuilt/agent.env",\n    filename: "agent.env",\n    sub_dir: "agentos",\n}\n'''
             changes[secret_bp] = secret_content
         binary_changes["system/agent/prebuilt/agent.env"] = args.runtime_secret_file
         rc_path = "system/agent/init/sideagentd.rc"
