@@ -54,7 +54,11 @@ internal fun CompactComposer(
     voiceAvailable: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val canSend = value.text.isNotBlank() && value.composition == null && !isRunning
+    // The explicit button submits the text currently visible to the user. A
+    // Chinese IME may keep that text in a composing range until it receives a
+    // candidate selection; treating the range as disabled makes the button
+    // appear to do nothing.
+    val canSend = value.text.isNotBlank() && !isRunning
     Surface(
         modifier = modifier.fillMaxWidth().testTag("chat_composer"),
         color = MaterialTheme.colorScheme.surface,
@@ -79,7 +83,9 @@ internal fun CompactComposer(
                         imeAction = ImeAction.Send,
                         hintLocales = LocaleList("zh-CN,en-US"),
                     ),
-                    keyboardActions = KeyboardActions(onSend = { if (canSend) onSend() }),
+                    // Keep the IME action conservative: let the IME finish its
+                    // candidate before submitting from the keyboard action.
+                    keyboardActions = KeyboardActions(onSend = { if (canSend && value.composition == null) onSend() }),
                     decorationBox = { input ->
                         Box(Modifier.fillMaxWidth().heightIn(min = 40.dp), contentAlignment = Alignment.CenterStart) {
                             if (value.text.isEmpty()) Text(

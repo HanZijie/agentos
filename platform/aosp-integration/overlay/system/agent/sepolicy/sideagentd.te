@@ -18,10 +18,14 @@ add_service(sideagentd, sideagent_service)
 allow system_server sideagent_service:service_manager find;
 binder_call(system_server, sideagentd)
 allow shell agentos_service:service_manager find;
+# Agenriod is a platform-signed privileged frontend. It discovers the broker
+# through the service manager, then uses the existing platform_app to
+# system_server binder permission for the AIDL calls.
+allow platform_app agentos_service:service_manager find;
 
 
 # Endpoint handles are acquired from the system broker after per-user grants.
-# Apps cannot find the daemon service; result callbacks validate the Plugin UID.
+# Apps still cannot find the daemon service; result callbacks validate the Plugin UID.
 allow sideagentd agentos_service:service_manager find;
 binder_call(sideagentd, system_server)
 binder_call(sideagentd, appdomain)

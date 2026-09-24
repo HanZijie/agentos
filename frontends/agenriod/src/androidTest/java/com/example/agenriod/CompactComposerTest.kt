@@ -72,7 +72,10 @@ class CompactComposerTest {
             assertNotNull(state.draftValue.composition)
             state = state.copy(status = "Background status update")
         }
-        compose.onNodeWithTag("chat_send").assertIsNotEnabled()
+        // The visible composing text is still valid input for the explicit
+        // Send button; only the IME action waits for composition to finish.
+        compose.onNodeWithTag("chat_send").assertIsEnabled().performClick()
+        compose.runOnIdle { assertEquals("nihao", sent) }
         val chinese = "你好，请帮我检查这个文件，保留中文标点与原文。"
         compose.runOnIdle { connection.setComposingText(chinese, 1) }
         compose.runOnIdle {
