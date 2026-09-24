@@ -277,7 +277,10 @@ def main():
         # Both products install the AgentOS daemon under /system.  AOSP's
         # artifact path check otherwise treats these overlay outputs as
         # unexpected files and stops the product build before ninja starts.
-        for artifact in ("system/bin/sideagentd", "system/etc/init/sideagentd.rc"):
+        artifacts = ["system/bin/sideagentd", "system/etc/init/sideagentd.rc"]
+        if args.runtime_secret_file is not None:
+            artifacts.append("system/etc/agentos/agent.env")
+        for artifact in artifacts:
             if artifact not in content:
                 content += f"\nPRODUCT_ARTIFACT_PATH_REQUIREMENT_ALLOWED_LIST += {artifact}\n"
         changes[path] = content
