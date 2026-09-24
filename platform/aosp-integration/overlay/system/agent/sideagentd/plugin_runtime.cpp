@@ -137,6 +137,13 @@ Json::Value InvokeRuntimeTool(int user_id, const RuntimeTool& tool, const Json::
   if (request.argsJson.size() > 65536) return Error("arguments_too_large");
   request.deadlineEpochMs = std::chrono::duration_cast<std::chrono::milliseconds>(
       std::chrono::system_clock::now().time_since_epoch()).count() + 15000;
+  AgentPluginInvokeResult direct;
+  if (session.endpoint->invokeSync(request, &direct).isOk()) {
+    if (direct.status != "ok") return Error(direct.error.code.c_str());
+    Json::Value value;
+    if (!Parse(direct.resultJson, &value)) return Error("invalid_plugin_result");
+    return value;
+  }
   auto sink = ndk::SharedRefBase::make<ResultSink>(session.pluginUid, operation_id);
   __android_log_print(ANDROID_LOG_ERROR, "sideagentd", "calling plugin beginInvoke request=%s tool=%s",
                       operation_id.c_str(), tool.capability.c_str());

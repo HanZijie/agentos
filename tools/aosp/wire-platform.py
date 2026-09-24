@@ -290,18 +290,79 @@ def main():
     # provisioned the device, while AgentOS has a declared system assistant
     # and must be usable immediately after boot.
     power_path = "frameworks/base/services/core/java/com/android/server/policy/PhoneWindowManager.java"
-    power_content = read(power_path)
-    power_needle = "if (mLongPressOnPowerBehavior == LONG_PRESS_POWER_ASSISTANT && !isDeviceProvisioned()) {"
-    power_replacement = (
-        "if (mLongPressOnPowerBehavior == LONG_PRESS_POWER_ASSISTANT\n"
-        "                && !isDeviceProvisioned()\n"
-        "                && !\"com.example.agenriod\".equals(mContext.getString(\n"
-        "                        com.android.internal.R.string.config_defaultAssistant))) {"
-    )
-    if power_needle in power_content:
-        changes[power_path] = power_content.replace(power_needle, power_replacement, 1)
-    elif "com.example.agenriod" not in power_content:
-        raise ValueError("PhoneWindowManager long-press assistant guard changed unexpectedly")
+    power_content = read(power_path) if (root / power_path).exists() else None
+    if power_content is not None:
+        power_needle = "if (mLongPressOnPowerBehavior == LONG_PRESS_POWER_ASSISTANT && !isDeviceProvisioned()) {"
+        power_replacement = (
+            "if (mLongPressOnPowerBehavior == LONG_PRESS_POWER_ASSISTANT\n"
+            "                && !isDeviceProvisioned()\n"
+            "                && !\"com.example.agenriod\".equals(mContext.getString(\n"
+            "                        com.android.internal.R.string.config_defaultAssistant))) {"
+        )
+        if power_needle in power_content:
+            changes[power_path] = power_content.replace(power_needle, power_replacement, 1)
+        elif "com.example.agenriod" not in power_content:
+            raise ValueError("PhoneWindowManager long-press assistant guard changed unexpectedly")
+
+    # The stock assistant path delegates to SystemUI and intentionally refuses
+    # to launch while Setup Wizard is incomplete.  AgentOS is a development
+    # image with its own front-end Activity, so make the power gesture
+    # deterministic: wake the display and launch that Activity directly.  The
+    # short power press remains in the stock policy and is not changed.
+    # Small wiring fixtures used by the script tests do not materialize this
+    # large framework source file; the real r34 checkout always does.
+    if power_content is None:
+        pass
+    else:
+        assistant_case = """            case LONG_PRESS_POWER_ASSISTANT:
+                mPowerKeyHandled = true;
+                performHapticFeedback(HapticFeedbackConstants.ASSISTANT_BUTTON,
+                        \"Power - Long Press - Go To Assistant\");
+                final int powerKeyDeviceId = INVALID_INPUT_DEVICE_ID;
+                launchAssistAction(null, powerKeyDeviceId, eventTime,
+                        AssistUtils.INVOCATION_TYPE_POWER_BUTTON_LONG_PRESS);
+                break;"""
+        agentos_case = """            case LONG_PRESS_POWER_ASSISTANT:
+                mPowerKeyHandled = true;
+                performHapticFeedback(HapticFeedbackConstants.ASSISTANT_BUTTON,
+                        \"Power - Long Press - Go To AgentOS\");
+                launchAgentosAssistant(eventTime);
+                break;"""
+        if assistant_case in power_content:
+            updated = changes.get(power_path, power_content)
+            changes[power_path] = updated.replace(assistant_case, agentos_case, 1)
+        elif "launchAgentosAssistant(eventTime);" not in power_content:
+            raise ValueError("PhoneWindowManager assistant case changed unexpectedly")
+
+        updated = changes.get(power_path, power_content)
+        if "private void launchAgentosAssistant(long eventTime)" not in updated:
+            method_marker = "    private void launchAssistAction(String hint, int deviceId, long eventTime,\n"
+            agentos_method = """    private void launchAgentosAssistant(long eventTime) {
+        try {
+            if (!mPowerManager.isInteractive()) {
+                mPowerManager.wakeUp(eventTime, PowerManager.WAKE_REASON_POWER_BUTTON,
+                        \"AGENTOS_POWER_LONG_PRESS\");
+            } else {
+                mPowerManager.userActivity(eventTime, false);
+            }
+            final Intent intent = new Intent(Intent.ACTION_MAIN)
+                    .addCategory(Intent.CATEGORY_LAUNCHER)
+                    .setComponent(new ComponentName(\"com.example.agenriod\",
+                            \"com.example.agenriod.MainActivity\"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                            | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                            | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            startActivityAsUser(intent, null, UserHandle.CURRENT_OR_SELF,
+                    true /* allowDuringSetup */);
+        } catch (RuntimeException e) {
+            Slog.e(TAG, \"Unable to launch AgentOS assistant Activity\", e);
+        }
+    }
+
+"""
+            if method_marker not in updated:
+                raise ValueError("PhoneWindowManager assistant method marker changed unexpectedly")
+            changes[power_path] = updated.replace(method_marker, agentos_method + method_marker, 1)
 
     changed = {}
     for path, content in changes.items():

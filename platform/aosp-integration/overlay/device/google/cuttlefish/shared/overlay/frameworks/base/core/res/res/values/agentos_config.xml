@@ -5,4 +5,5 @@
     <!-- PhoneWindowManager: 5 means go to Settings.Secure.ASSISTANT. -->
     <integer name="config_longPressOnPowerBehavior">5</integer>
     <bool name="config_longPressOnPowerForAssistantSettingAvailable">true</bool>
+    <bool name="config_supportLongPressPowerWhenNonInteractive">true</bool>
 </resources>

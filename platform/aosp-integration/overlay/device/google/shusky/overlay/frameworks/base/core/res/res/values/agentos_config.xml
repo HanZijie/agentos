@@ -3,4 +3,5 @@
     <string name="config_defaultAssistant" translatable="false">com.example.agenriod</string>
     <integer name="config_longPressOnPowerBehavior">5</integer>
     <bool name="config_longPressOnPowerForAssistantSettingAvailable">true</bool>
+    <bool name="config_supportLongPressPowerWhenNonInteractive">true</bool>
 </resources>

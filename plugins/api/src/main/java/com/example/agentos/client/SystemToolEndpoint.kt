@@ -48,10 +48,15 @@ open class SystemToolEndpoint(
     }
 
     override fun openPluginSessionV2(id: String, host: AgentPluginHostInfo,
-                                    callback: IAgentPluginHostCallback): AgentPluginDescriptor {
+        callback: IAgentPluginHostCallback): AgentPluginDescriptor {
         systemCaller()
         sessions[id] = emptySet()
         return describe()
+    }
+
+    override fun invokeSync(request: AgentPluginInvokeRequest): AgentPluginInvokeResult {
+        runtimeCaller()
+        return execute(request)
     }
 
     override fun sessionGranted(id: String, granted: AgentPluginCapabilities) {
@@ -69,30 +74,34 @@ open class SystemToolEndpoint(
         Log.i(TAG, "beginInvoke request=${request.requestId} tool=${request.tool}")
         executor.execute {
             Log.i(TAG, "execute request=${request.requestId} tool=${request.tool}")
-            val result = runCatching {
-                require(request.requestId.length in 1..512 && request.argsJson.length <= 65536) { "invalid_request" }
-                require(request.tool in sessions[request.pluginSessionId].orEmpty()) { "capability_denied" }
-                require(request.deadlineEpochMs > System.currentTimeMillis()) { "deadline_expired" }
-                require(!cancelled.remove(request.requestId)) { "cancelled" }
-                val arguments = JSONObject(request.argsJson)
-                if (toolEffects[request.tool] == "none") invoke(request.tool, arguments, "")
-                else mutate(request, arguments)
-            }
-            val reply = AgentPluginInvokeResult().apply {
-                requestId = request.requestId
-                generatedAtMs = System.currentTimeMillis()
-                status = if (result.isSuccess) "ok" else "error"
-                resultJson = result.getOrNull()?.toString().orEmpty()
-                error = AgentPluginInvokeError().apply {
-                    code = if (result.exceptionOrNull()?.message == "operation_unknown") "operation_unknown" else "tool_failed"
-                    message = result.exceptionOrNull()?.message?.take(256).orEmpty()
-                    retryable = false
-                    dataJson = "{}"
-                }
-            }
+            val reply = execute(request)
             Log.i(TAG, "reply request=${request.requestId} status=${reply.status} code=${reply.error.code}")
             runCatching { sink.onResultSync(reply) }
                 .onFailure { Log.e(TAG, "reply failed request=${request.requestId}", it) }
+        }
+    }
+
+    private fun execute(request: AgentPluginInvokeRequest): AgentPluginInvokeResult {
+        val result = runCatching {
+            require(request.requestId.length in 1..512 && request.argsJson.length <= 65536) { "invalid_request" }
+            require(request.tool in sessions[request.pluginSessionId].orEmpty()) { "capability_denied" }
+            require(request.deadlineEpochMs > System.currentTimeMillis()) { "deadline_expired" }
+            require(!cancelled.remove(request.requestId)) { "cancelled" }
+            val arguments = JSONObject(request.argsJson)
+            if (toolEffects[request.tool] == "none") invoke(request.tool, arguments, "")
+            else mutate(request, arguments)
+        }
+        return AgentPluginInvokeResult().apply {
+            requestId = request.requestId
+            generatedAtMs = System.currentTimeMillis()
+            status = if (result.isSuccess) "ok" else "error"
+            resultJson = result.getOrNull()?.toString().orEmpty()
+            error = AgentPluginInvokeError().apply {
+                code = if (result.exceptionOrNull()?.message == "operation_unknown") "operation_unknown" else "tool_failed"
+                message = result.exceptionOrNull()?.message?.take(256).orEmpty()
+                retryable = false
+                dataJson = "{}"
+            }
         }
     }
 

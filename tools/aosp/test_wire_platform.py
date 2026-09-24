@@ -214,6 +214,7 @@ class WirePlatformTest(unittest.TestCase):
         self.assertIn("PRODUCT_PACKAGES += agenriod_frontend_default_permissions", product)
         config = (self.root / "device/google/cuttlefish/shared/overlay/frameworks/base/core/res/res/values/agentos_config.xml").read_text()
         self.assertIn("config_defaultAssistant", config)
+        self.assertIn("config_supportLongPressPowerWhenNonInteractive", config)
         before = self.snapshot()
         repeat = self.wire("--apply", "--frontend-apk", str(frontend),
                            "--notes-apk", str(notes))
