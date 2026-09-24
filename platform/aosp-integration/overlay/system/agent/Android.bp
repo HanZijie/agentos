@@ -15,7 +15,7 @@ aidl_interface {
     // The frontend/session methods are still being exercised on the target
     // image. Keep the current surface buildable while the next API version is
     // frozen.
-    frozen: false,
+    frozen: true,
     stability: "vintf",
     versions_with_info: [
         {
