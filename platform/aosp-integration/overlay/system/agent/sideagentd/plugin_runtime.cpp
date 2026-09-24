@@ -42,7 +42,7 @@ class ResultSink final : public BnAgentPluginResultSink {
   ResultSink(int uid, std::string request) : uid_(uid), request_(std::move(request)) {}
   ndk::ScopedAStatus onResult(const AgentPluginInvokeResult& result) override {
     const uid_t caller = AIBinder_getCallingUid();
-    __android_log_print(ANDROID_LOG_INFO, "sideagentd",
+    __android_log_print(ANDROID_LOG_ERROR, "sideagentd",
                         "plugin result uid=%u expected=%d request_match=%d status=%s bytes=%zu",
                         caller, uid_, result.requestId == request_, result.status.c_str(),
                         result.resultJson.size());
@@ -130,9 +130,13 @@ Json::Value InvokeRuntimeTool(int user_id, const RuntimeTool& tool, const Json::
   request.deadlineEpochMs = std::chrono::duration_cast<std::chrono::milliseconds>(
       std::chrono::system_clock::now().time_since_epoch()).count() + 15000;
   auto sink = ndk::SharedRefBase::make<ResultSink>(session.pluginUid, operation_id);
+  __android_log_print(ANDROID_LOG_ERROR, "sideagentd", "calling plugin beginInvoke request=%s tool=%s",
+                      operation_id.c_str(), tool.capability.c_str());
   if (!session.endpoint->beginInvoke(request, sink).isOk()) return Error("plugin_unavailable");
   bool finished = false;
   Json::Value result = sink->Wait(cancelled, &finished);
+  __android_log_print(ANDROID_LOG_ERROR, "sideagentd", "plugin wait finished=%d request=%s",
+                      finished, operation_id.c_str());
   if (!finished) session.endpoint->cancelInvoke(session.pluginSessionId, operation_id);
   return result;
 }
