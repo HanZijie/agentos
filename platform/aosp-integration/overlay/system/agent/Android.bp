@@ -24,6 +24,9 @@ aidl_interface {
         {
             version: "2",
         },
+        {
+            version: "3",
+        },
     ],
     backend: {
         cpp: { enabled: false },
