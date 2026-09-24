@@ -222,6 +222,21 @@ class WirePlatformTest(unittest.TestCase):
         self.assertIn("Applied 0 files and 0 APKs;", repeat.stdout)
         self.assertEqual(self.snapshot(), before)
 
+    def test_runtime_secret_adds_private_fs_config_rule(self):
+        secret = self.parent / "agent.env"
+        secret.write_text("\n".join([
+            "MINIMAX_API_KEY=minimax", "MINIMAX_BASE_URL=https://example.invalid",
+            "MINIMAX_MODEL=MiniMax-M3", "JEV_API_KEY=jev",
+            "JEV_ENDPOINT=https://example.invalid", "JEV_MODEL=jev-latest", "",
+        ]))
+        secret.chmod(0o600)
+        result = self.wire("--apply", "--runtime-secret-file", str(secret))
+        self.assert_success(result)
+        product = (self.root / "device/google/cuttlefish/shared/device.mk").read_text()
+        self.assertIn("TARGET_FS_CONFIG_GEN += system/agent/agentos.fs", product)
+        self.assertEqual((self.root / "system/agent/agentos.fs").read_text(),
+                         (OVERLAY / "system/agent/agentos.fs").read_text())
+
     def test_demo_apks_are_staged_and_added_to_product(self):
         alarm = self.parent / "alarm-debug.apk"
         calendar = self.parent / "calendar-debug.apk"

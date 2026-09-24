@@ -264,6 +264,7 @@ def main():
                          "PRODUCT_PACKAGES += LatinIME"]
         if args.runtime_secret_file is not None:
             product_lines.append("PRODUCT_PACKAGES += agentos_runtime_secret")
+            product_lines.append("TARGET_FS_CONFIG_GEN += system/agent/agentos.fs")
         if args.frontend_apk is not None:
             product_lines.append("PRODUCT_PACKAGES += agenriod_frontend agenriod_notes")
             product_lines.append("PRODUCT_PACKAGES += agenriod_frontend_privapp_permissions")
