@@ -48,6 +48,7 @@ cc_binary {
         "libcrypto",
         "libssl",
         "libjsoncpp",
+        "liblog",
     ],
     static_libs: ["agentos_system_aidl-V3-ndk"],
     init_rc: ["init/sideagentd.rc"],
