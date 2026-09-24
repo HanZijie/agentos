@@ -25,6 +25,8 @@ def main():
                         help="Gradle-built AgentOS calendar demo APK")
     parser.add_argument("--demo-meeting-records-apk", type=Path,
                         help="Gradle-built AgentOS meeting-records demo APK")
+    parser.add_argument("--runtime-secret-file", type=Path,
+                        help="Protected env file to embed in the development image")
     args = parser.parse_args()
     if (args.frontend_apk is None) != (args.notes_apk is None):
         parser.error("--frontend-apk and --notes-apk must be supplied together")
@@ -40,6 +42,34 @@ def main():
     for path, label in zip(demo_apks, ("alarm demo APK", "calendar demo APK", "meeting-records demo APK")):
         if path is not None and not path.is_file():
             parser.error(f"{label} does not exist: {path}")
+    if args.runtime_secret_file is not None:
+        if not args.runtime_secret_file.is_file():
+            parser.error(f"runtime secret file does not exist: {args.runtime_secret_file}")
+        if args.runtime_secret_file.stat().st_mode & 0o077:
+            parser.error("runtime secret file must be mode 0600 or stricter")
+        allowed = {
+            "MINIMAX_API_KEY", "MINIMAX_BASE_URL", "MINIMAX_MODEL",
+            "JEV_API_KEY", "JEV_ENDPOINT", "JEV_MODEL",
+            "MINIMAX_TIMEOUT_MS", "JEV_TIMEOUT_MS",
+        }
+        values = {}
+        for raw in args.runtime_secret_file.read_text().splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                parser.error("runtime secret file contains a malformed line")
+            key, value = (part.strip() for part in line.split("=", 1))
+            if key not in allowed:
+                parser.error(f"runtime secret file contains unsupported key: {key}")
+            if not value:
+                parser.error(f"runtime secret file contains an empty value: {key}")
+            values[key] = value
+        required = {"MINIMAX_API_KEY", "MINIMAX_BASE_URL", "MINIMAX_MODEL",
+                    "JEV_API_KEY", "JEV_ENDPOINT", "JEV_MODEL"}
+        missing = sorted(required - values.keys())
+        if missing:
+            parser.error("runtime secret file is missing required keys: " + ", ".join(missing))
     root = args.aosp_root.resolve()
     manifest = root / ".repo/manifests/default.xml"
     revision = ET.parse(manifest).getroot().find("default").get("revision")
@@ -112,6 +142,26 @@ def main():
                 binary_changes[relative] = source
         changes["system/agent/demo/Android.bp"] = (
             overlay / "system/agent/demo/Android.bp").read_text()
+    if args.runtime_secret_file is not None:
+        secret_bp = "system/agent/Android.bp"
+        secret_content = read(secret_bp)
+        secret_marker = 'name: "agentos_runtime_secret"'
+        if secret_marker not in secret_content:
+            secret_content += '''\n\nprebuilt_etc {\n    name: "agentos_runtime_secret",\n    src: "prebuilt/agent.env",\n    filename: "agent.env",\n    sub_dir: "agentos",\n    mode: "0600",\n}\n'''
+            changes[secret_bp] = secret_content
+        binary_changes["system/agent/prebuilt/agent.env"] = args.runtime_secret_file
+        rc_path = "system/agent/init/sideagentd.rc"
+        rc_content = read(rc_path)
+        copy_lines = (
+            "    copy /system/etc/agentos/agent.env /data/agent/secrets/agent.env\n"
+            "    chown sideagent sideagent /data/agent/secrets/agent.env\n"
+            "    chmod 0600 /data/agent/secrets/agent.env\n"
+        )
+        if "copy /system/etc/agentos/agent.env" not in rc_content:
+            marker = "    restorecon_recursive /data/agent\n"
+            if rc_content.count(marker) != 1:
+                raise ValueError("Expected one sideagentd post-fs-data restorecon marker")
+            changes[rc_path] = rc_content.replace(marker, copy_lines + marker, 1)
     # Include the stable API checksum, while skipping macOS metadata above.
     for source in overlay.rglob(".hash"):
         changes[str(source.relative_to(overlay))] = source.read_text()
@@ -210,7 +260,10 @@ def main():
     for path in product_paths:
         content = read(path)
         product_lines = ["PRODUCT_SOONG_NAMESPACES += system/agent",
-                         "PRODUCT_PACKAGES += sideagentd"]
+                         "PRODUCT_PACKAGES += sideagentd",
+                         "PRODUCT_PACKAGES += LatinIME"]
+        if args.runtime_secret_file is not None:
+            product_lines.append("PRODUCT_PACKAGES += agentos_runtime_secret")
         if args.frontend_apk is not None:
             product_lines.append("PRODUCT_PACKAGES += agenriod_frontend agenriod_notes")
             product_lines.append("PRODUCT_PACKAGES += agenriod_frontend_privapp_permissions")
@@ -228,6 +281,24 @@ def main():
             if artifact not in content:
                 content += f"\nPRODUCT_ARTIFACT_PATH_REQUIREMENT_ALLOWED_LIST += {artifact}\n"
         changes[path] = content
+
+    # Keep the AgentOS assistant reachable on a fresh development image.  The
+    # stock policy intentionally shows global actions until Setup Wizard has
+    # provisioned the device, while AgentOS has a declared system assistant
+    # and must be usable immediately after boot.
+    power_path = "frameworks/base/services/core/java/com/android/server/policy/PhoneWindowManager.java"
+    power_content = read(power_path)
+    power_needle = "if (mLongPressOnPowerBehavior == LONG_PRESS_POWER_ASSISTANT && !isDeviceProvisioned()) {"
+    power_replacement = (
+        "if (mLongPressOnPowerBehavior == LONG_PRESS_POWER_ASSISTANT\n"
+        "                && !isDeviceProvisioned()\n"
+        "                && !\"com.example.agenriod\".equals(mContext.getString(\n"
+        "                        com.android.internal.R.string.config_defaultAssistant))) {"
+    )
+    if power_needle in power_content:
+        changes[power_path] = power_content.replace(power_needle, power_replacement, 1)
+    elif "com.example.agenriod" not in power_content:
+        raise ValueError("PhoneWindowManager long-press assistant guard changed unexpectedly")
 
     changed = {}
     for path, content in changes.items():

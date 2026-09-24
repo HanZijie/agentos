@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- AgentOS development images are provisioned on first boot. -->
+    <bool name="def_device_provisioned">true</bool>
+    <bool name="def_user_setup_complete">true</bool>
+    <bool name="def_show_ime_with_hard_keyboard">true</bool>
+</resources>
