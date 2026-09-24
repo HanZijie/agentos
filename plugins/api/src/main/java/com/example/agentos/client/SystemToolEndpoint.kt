@@ -91,7 +91,7 @@ open class SystemToolEndpoint(
                 }
             }
             Log.i(TAG, "reply request=${request.requestId} status=${reply.status} code=${reply.error.code}")
-            runCatching { sink.onResult(reply) }
+            runCatching { sink.onResultSync(reply) }
                 .onFailure { Log.e(TAG, "reply failed request=${request.requestId}", it) }
         }
     }

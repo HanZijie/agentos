@@ -41,6 +41,13 @@ class ResultSink final : public BnAgentPluginResultSink {
  public:
   ResultSink(int uid, std::string request) : uid_(uid), request_(std::move(request)) {}
   ndk::ScopedAStatus onResult(const AgentPluginInvokeResult& result) override {
+    return HandleResult(result);
+  }
+  ndk::ScopedAStatus onResultSync(const AgentPluginInvokeResult& result) override {
+    return HandleResult(result);
+  }
+ private:
+  ndk::ScopedAStatus HandleResult(const AgentPluginInvokeResult& result) {
     const uid_t caller = AIBinder_getCallingUid();
     __android_log_print(ANDROID_LOG_ERROR, "sideagentd",
                         "plugin result uid=%u expected=%d request_match=%d status=%s bytes=%zu",
@@ -70,7 +77,6 @@ class ResultSink final : public BnAgentPluginResultSink {
     done_ = true;  // Late results cannot change the observed outcome.
     return Error(cancelled && cancelled->load() ? "cancelled" : "operation_unknown");
   }
- private:
   int uid_;
   std::string request_;
   std::mutex lock_;
