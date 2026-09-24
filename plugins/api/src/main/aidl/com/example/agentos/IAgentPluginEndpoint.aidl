@@ -18,7 +18,7 @@ interface IAgentPluginEndpoint {
     // Versioned handshake and asynchronous capability data plane.
     AgentPluginDescriptor openPluginSessionV2(String pluginSessionId,
             in AgentPluginHostInfo hostInfo, IAgentPluginHostCallback hostCallback);
-    oneway void sessionGranted(String pluginSessionId, in AgentPluginCapabilities granted);
+    void sessionGranted(String pluginSessionId, in AgentPluginCapabilities granted);
     oneway void beginInvoke(in AgentPluginInvokeRequest request, IAgentPluginResultSink sink);
     oneway void beginReadResource(in AgentPluginResourceRequest request,
             IAgentPluginResultSink sink);

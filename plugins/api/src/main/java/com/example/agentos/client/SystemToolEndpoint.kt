@@ -65,10 +65,12 @@ open class SystemToolEndpoint(
     override fun invokeSyncJson(request: AgentPluginInvokeRequest): String {
         runtimeCaller()
         val reply = execute(request)
+        Log.i(TAG, "invokeSyncJson reply request=${request.requestId} status=${reply.status} code=${reply.error.code} message=${reply.error.message}")
         return JSONObject()
             .put("status", reply.status)
             .put("resultJson", reply.resultJson)
             .put("errorCode", reply.error.code)
+            .put("errorMessage", reply.error.message)
             .toString()
     }
 

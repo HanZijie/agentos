@@ -142,7 +142,11 @@ Json::Value InvokeRuntimeTool(int user_id, const RuntimeTool& tool, const Json::
   if (direct_json_status.isOk()) {
     Json::Value envelope;
     if (!Parse(direct_json, &envelope) || !envelope.isObject()) return Error("invalid_plugin_result");
-    if (envelope["status"].asString() != "ok") return Error(envelope["errorCode"].asCString());
+    if (envelope["status"].asString() != "ok") {
+      __android_log_print(ANDROID_LOG_ERROR, "sideagentd", "plugin invokeSyncJson result error code=%s message=%s",
+                          envelope["errorCode"].asCString(), envelope["errorMessage"].asCString());
+      return Error(envelope["errorCode"].asCString());
+    }
     Json::Value value;
     if (!Parse(envelope["resultJson"].asString(), &value)) return Error("invalid_plugin_result");
     return value;
