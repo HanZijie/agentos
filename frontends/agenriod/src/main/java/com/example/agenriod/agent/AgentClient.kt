@@ -72,7 +72,11 @@ class AgentClient(private val context: Context) {
     fun updateDraft(value: TextFieldValue) { _state.value = _state.value.copy(draftValue = value) }
     fun send(images: List<ImageAttachment> = emptyList()) {
         val editor = _state.value.draftValue
-        if (editor.composition != null || editor.text.isBlank()) return
+        // A Chinese IME can leave a composing range active when the user taps
+        // Send. The explicit button is an intent to submit the visible text;
+        // do not silently discard it just because the IME has not committed
+        // its composition yet.
+        if (editor.text.isBlank()) return
         val requestId = UUID.randomUUID().toString()
         val content = JSONObject().put("content", JSONArray().apply {
             put(JSONObject().put("type", "text").put("text", editor.text))
