@@ -286,24 +286,30 @@ def main():
                 content += f"\nPRODUCT_ARTIFACT_PATH_REQUIREMENT_ALLOWED_LIST += {artifact}\n"
         changes[path] = content
 
-    # Keep the AgentOS assistant reachable on a fresh development image.  The
-    # stock policy intentionally shows global actions until Setup Wizard has
-    # provisioned the device, while AgentOS has a declared system assistant
-    # and must be usable immediately after boot.
+    # The AgentOS product selects LONG_PRESS_POWER_ASSISTANT. The stock policy
+    # turns that into Global Actions until setup completes. Preserve behavior
+    # 5 on this development image so powerLongPress reaches our Activity path.
     power_path = "frameworks/base/services/core/java/com/android/server/policy/PhoneWindowManager.java"
     power_content = read(power_path) if (root / power_path).exists() else None
     if power_content is not None:
-        power_needle = "if (mLongPressOnPowerBehavior == LONG_PRESS_POWER_ASSISTANT && !isDeviceProvisioned()) {"
-        power_replacement = (
-            "if (mLongPressOnPowerBehavior == LONG_PRESS_POWER_ASSISTANT\n"
-            "                && !isDeviceProvisioned()\n"
-            "                && !\"com.example.agenriod\".equals(mContext.getString(\n"
-            "                        com.android.internal.R.string.config_defaultAssistant))) {"
-        )
-        if power_needle in power_content:
-            changes[power_path] = power_content.replace(power_needle, power_replacement, 1)
-        elif "com.example.agenriod" not in power_content:
-            raise ValueError("PhoneWindowManager long-press assistant guard changed unexpectedly")
+        guard_start = power_content.find("    private int getResolvedLongPressOnPowerBehavior() {")
+        guard_end = power_content.find("    private void stemPrimaryPress(", guard_start)
+        if guard_start < 0 or guard_end < 0:
+            raise ValueError("PhoneWindowManager power behavior method changed unexpectedly")
+        guard = power_content[guard_start:guard_end]
+        fallback_start = guard.find("        // If the config indicates the assistant behavior")
+        fallback_end = guard.find("\n        }\n", fallback_start)
+        if fallback_start >= 0 and fallback_end >= 0:
+            fallback_end += len("\n        }\n")
+            fallback = guard[fallback_start:fallback_end]
+            if "mLongPressOnPowerBehavior == LONG_PRESS_POWER_ASSISTANT" not in fallback or \
+                    "return LONG_PRESS_POWER_" not in fallback:
+                raise ValueError("PhoneWindowManager long-press setup guard changed unexpectedly")
+            updated_guard = guard[:fallback_start] + (
+                "        // AgentOS power long press remains available during setup.\n") + guard[fallback_end:]
+            changes[power_path] = power_content[:guard_start] + updated_guard + power_content[guard_end:]
+        elif "AgentOS power long press remains available during setup." not in guard:
+            raise ValueError("PhoneWindowManager long-press setup guard changed unexpectedly")
 
     # The stock assistant path delegates to SystemUI and intentionally refuses
     # to launch while Setup Wizard is incomplete.  AgentOS is a development
