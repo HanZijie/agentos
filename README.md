@@ -8,6 +8,17 @@ AgentOS 将 Agent 作为 Android 系统组件运行。Agent 由系统启动和�
 
 当前仓库处于系统化迁移阶段。`frontends/agenriod` 保留旧 Agent Host 作为测试兼容代码；正常系统镜像路径由 `AgentManagerService` 和 `sideagentd` 提供 Session、事件和 Plugin 路由。native `sideagentd` 已包含 MiniMax-M3 Worker、Jev Session 选择、secret 读取和重启恢复 fencing；匹配的 AOSP 镜像仍需通过 Cuttlefish 真实请求脚本后才算设备验收完成。
 
+## 架构总览：系统 Agent、ACP、Plugin 和本地记忆
+
+完整架构说明见 [`docs/agentos-architecture.md`](docs/agentos-architecture.md)，图示见 [`docs/assets/agentos-architecture.svg`](docs/assets/agentos-architecture.svg)。阅读这部分时先抓住四个边界：
+
+- Agent 是 Android 系统服务体系：`init` 启动 `sideagentd`，`system_server` 中的 `AgentManagerService` 管理控制面；`system/agent/daemon` 是 Node 参考 daemon，不是镜像里的系统宿主。
+- 手机 App 通过 ACP 语义或 Android Agent Bus/AIDL 使用 Agent；App 通过 Plugin endpoint 和 MCP 暴露自己的工具、资源和外部连接。
+- Plugin 按 capability lease 按需拉起，空闲后 unbind，允许 Android freezer 和 OOM 策略回收；启用开关本身不等于启动 App 进程。
+- Jev 选择已有 Session 或 `new_session`，MiniMax-M3 执行当前 Task。Graph Wiki 是计划中的本地记忆 provider，当前仓库还没有对应实现。
+
+![AgentOS 架构图](docs/assets/agentos-architecture.svg)
+
 前端原型还提供了一个 Android 系统助理入口：将 Agenriod 设为默认数字助理后，设备支持的助理手势可以唤起 Siri 风格的 Compose surface。配置步骤、语音行为和电源键映射边界见 [`docs/assistant-frontend.md`](docs/assistant-frontend.md)。
 
 ## 目标架构

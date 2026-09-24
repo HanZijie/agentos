@@ -1,5 +1,9 @@
 # AgentOS 系统架构
 
+面向项目整体的 ACP、Plugin/MCP、freezer、Jev Session 和 Graph Wiki 说明见
+[`agentos-architecture.md`](agentos-architecture.md)。本文保留系统接口、持久化和
+安全边界的细节。
+
 ## 目标
 
 Agent 是由 Android 系统启动和监管的独立系统组件。Agent 的进程、任务、Session、事件日志和 Plugin 会话不属于任何前端 App。App 通过系统接口使用 Agent，前端关闭或替换不会改变 Agent 的事实状态。

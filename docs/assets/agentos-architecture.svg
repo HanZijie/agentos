@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="820" viewBox="0 0 1400 820" role="img" aria-labelledby="title desc">
+  <title id="title">AgentOS system architecture</title>
+  <desc id="desc">Phone frontends use ACP or Agent Bus to reach AgentManagerService. sideagentd runs the Agent runtime, selects Sessions with Jev, calls MiniMax, and leases Plugin capabilities. Plugin App processes may use MCP. Graph Wiki is a planned local memory provider.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#344054"/>
+    </marker>
+    <style>
+      .title { font: 700 26px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; fill: #172033; }
+      .label { font: 700 17px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; fill: #172033; }
+      .body { font: 14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; fill: #344054; }
+      .small { font: 12px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; fill: #667085; }
+      .box { stroke: #344054; stroke-width: 1.5; rx: 16; }
+      .current { fill: #eef4ff; }
+      .system { fill: #e8f7f0; }
+      .plugin { fill: #fff5e8; }
+      .planned { fill: #f4efff; stroke-dasharray: 7 5; }
+      .edge { stroke: #344054; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .dashed { stroke-dasharray: 8 6; }
+      .edgeText { font: 12px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; fill: #475467; }
+    </style>
+  </defs>
+
+  <rect width="1400" height="820" fill="#fbfcfe"/>
+  <text x="56" y="54" class="title">AgentOS：Agent 系统服务与 App 能力边界</text>
+  <text x="56" y="82" class="small">蓝色：当前接口/实现　绿色：系统服务体系　橙色：App Plugin　紫色虚线：设计扩展点</text>
+
+  <rect x="56" y="126" width="292" height="190" class="box current"/>
+  <text x="80" y="164" class="label">手机 App / System UI</text>
+  <text x="80" y="196" class="body">ACP v1 adapter（Node 参考入口）</text>
+  <text x="80" y="222" class="body">Agent Bus / stable AIDL</text>
+  <text x="80" y="248" class="body">创建 Session · 提交输入</text>
+  <text x="80" y="274" class="body">订阅 sequence 事件 · 渲染界面</text>
+
+  <rect x="416" y="126" width="330" height="220" class="box system"/>
+  <text x="440" y="164" class="label">system_server</text>
+  <text x="440" y="190" class="label">AgentManagerService</text>
+  <text x="440" y="222" class="body">Agent Binder 服务 / User 生命周期</text>
+  <text x="440" y="248" class="body">PackageManager · UID · 签名校验</text>
+  <text x="440" y="274" class="body">Plugin manifest 发现与 per-user grant</text>
+  <text x="440" y="300" class="body">按需 bind · handshake · lease 管理</text>
+
+  <rect x="814" y="104" width="350" height="310" class="box system"/>
+  <text x="840" y="144" class="label">sideagentd</text>
+  <text x="840" y="168" class="small">init 启动 · UID 1096 · SELinux domain</text>
+  <text x="840" y="204" class="body">Session / Task / Event Store</text>
+  <text x="840" y="230" class="body">Jev Session Selector</text>
+  <text x="840" y="256" class="body">MiniMax-M3 Native Worker</text>
+  <text x="840" y="282" class="body">Capability Broker / Plugin lease</text>
+  <text x="840" y="308" class="body">SecretStore / restart recovery</text>
+  <text x="840" y="348" class="body">beginInvoke · resource · cancel</text>
+  <text x="840" y="374" class="body">输出事件：sequence + snapshot</text>
+
+  <rect x="1210" y="126" width="150" height="185" class="box plugin"/>
+  <text x="1232" y="164" class="label">Plugin App</text>
+  <text x="1232" y="192" class="body">自己的 UID</text>
+  <text x="1232" y="218" class="body">endpoint service</text>
+  <text x="1232" y="244" class="body">tools / resources</text>
+  <text x="1232" y="270" class="body">Binder result sink</text>
+
+  <rect x="1210" y="354" width="150" height="120" class="box plugin"/>
+  <text x="1232" y="390" class="label">MCP</text>
+  <text x="1232" y="418" class="body">App 私有连接</text>
+  <text x="1232" y="444" class="body">HTTP / loopback</text>
+
+  <rect x="814" y="520" width="350" height="150" class="box planned"/>
+  <text x="840" y="558" class="label">Graph Wiki（计划中的本地记忆）</text>
+  <text x="840" y="588" class="body">User-scoped facts / entities / edges</text>
+  <text x="840" y="614" class="body">来源 Session · Task · 可撤回与删除</text>
+  <text x="840" y="640" class="body">不是事件日志；作为 memory provider</text>
+
+  <rect x="56" y="520" width="650" height="150" class="box current"/>
+  <text x="80" y="558" class="label">Plugin 生命周期与 freezer</text>
+  <text x="80" y="588" class="body">启用只记录授权 → 第一次调用获得 lease → BIND_AUTO_CREATE | BIND_IMPORTANT</text>
+  <text x="80" y="614" class="body">握手完成后调用 endpoint；lease 到期/空闲 unbind → 允许冻结和回收</text>
+  <text x="80" y="640" class="small">完整 CachedAppOptimizer / phantom killer 豁免仍需目标设备验证</text>
+
+  <path d="M348 220 H416" class="edge"/>
+  <text x="354" y="210" class="edgeText">ACP / Agent Bus</text>
+  <path d="M746 222 H814" class="edge"/>
+  <text x="754" y="212" class="edgeText">AIDL control</text>
+  <path d="M814 292 H746" class="edge dashed"/>
+  <text x="748" y="318" class="edgeText">health / task / lease</text>
+  <path d="M746 302 C880 430 1080 470 1210 234" class="edge"/>
+  <text x="1010" y="430" class="edgeText">bind + handshake</text>
+  <path d="M1164 298 H1210" class="edge"/>
+  <text x="1168" y="286" class="edgeText">invoke</text>
+  <path d="M1285 311 V354" class="edge"/>
+  <text x="1294" y="338" class="edgeText">MCP</text>
+  <path d="M984 414 V520" class="edge dashed"/>
+  <text x="995" y="474" class="edgeText">read / write memory</text>
+  <path d="M814 594 C680 560 520 520 416 346" class="edge dashed"/>
+  <text x="558" y="536" class="edgeText">policy + user scope</text>
+
+  <g transform="translate(56 730)">
+    <line x1="0" y1="0" x2="42" y2="0" class="edge"/><text x="54" y="5" class="small">当前调用/控制方向</text>
+    <line x1="230" y1="0" x2="272" y2="0" class="edge dashed"/><text x="284" y="5" class="small">设计扩展或待验证边界</text>
+  </g>
+</svg>
