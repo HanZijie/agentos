@@ -27,6 +27,7 @@ import android.os.ShellCommand;
 import android.os.SystemClock;
 import android.os.UserHandle;
 import android.os.UserManager;
+import android.provider.Settings;
 import android.util.ArrayMap;
 import android.util.ArraySet;
 import android.util.AtomicFile;
@@ -175,7 +176,18 @@ public final class AgentManagerService extends SystemService {
     private void startUser(int userId) {
         loadState();
         mStartedUsers.add(userId);
+        ensureDefaultAssistant(userId);
         scanUser(userId);
+    }
+
+    private void ensureDefaultAssistant(int userId) {
+        String current = Settings.Secure.getStringForUser(getContext().getContentResolver(),
+                Settings.Secure.ASSISTANT, userId);
+        if (current == null || current.isEmpty()) {
+            Settings.Secure.putStringForUser(getContext().getContentResolver(),
+                    Settings.Secure.ASSISTANT,
+                    "com.example.agenriod/.voice.AgenriodVoiceInteractionService", userId);
+        }
     }
 
     private void stopUser(int userId) {
