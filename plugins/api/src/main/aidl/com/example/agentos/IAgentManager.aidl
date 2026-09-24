@@ -1,6 +1,7 @@
 package com.example.agentos;
 
 import com.example.agentos.AgentHealth;
+import com.example.agentos.AgentPluginSession;
 import com.example.agentos.AgentEnqueueResult;
 import com.example.agentos.AgentSessionSnapshot;
 import com.example.agentos.IAgentEventCallback;
@@ -17,4 +18,8 @@ interface IAgentManager {
     void cancelTask(String sessionId, String requestId);
     void resolveRecovery(String sessionId, String requestId);
     AgentSessionSnapshot getSnapshot(String sessionId);
+    // Internal capability broker. Only the dedicated sideagent UID may call.
+    String getRuntimePluginCatalog(int userId);
+    AgentPluginSession acquireRuntimePlugin(int userId, String pluginId, String leaseId);
+    oneway void releaseRuntimePlugin(String pluginSessionId, String leaseId);
 }

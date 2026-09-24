@@ -1,0 +1,50 @@
+{
+  "protocolVersion": 3,
+  "pluginId": "com.example.agentos.demo.alarm",
+  "displayName": "Alarms",
+  "version": "0.2.0",
+  "tools": [
+    {
+      "name": "alarm.list",
+      "description": "Read scheduled one-time alarms",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "sideEffects": "none",
+      "timeoutHintMs": 8000
+    },
+    {
+      "name": "alarm.create",
+      "description": "Schedule a real exact AlarmManager alarm and notification on this device",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": ""
+          },
+          "date": {
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          "time": {
+            "type": "string",
+            "description": "HH:mm:ss or HH:mm local device time"
+          }
+        },
+        "required": [
+          "label",
+          "date",
+          "time"
+        ],
+        "additionalProperties": false
+      },
+      "sideEffects": "external",
+      "timeoutHintMs": 8000
+    }
+  ],
+  "resources": []
+}

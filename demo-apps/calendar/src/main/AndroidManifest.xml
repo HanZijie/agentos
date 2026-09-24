@@ -13,5 +13,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <service android:name=".SystemPluginEndpointService" android:exported="true"
+            android:permission="com.example.agentos.permission.BIND_AGENT_PLUGIN">
+            <intent-filter><action android:name="agentos.intent.action.PLUGIN_ENDPOINT" /></intent-filter>
+            <meta-data android:name="agentos.plugin.id" android:value="com.example.agentos.demo.calendar" />
+            <meta-data android:name="agentos.plugin.descriptor" android:resource="@raw/agentos_plugin" />
+        </service>
     </application>
 </manifest>

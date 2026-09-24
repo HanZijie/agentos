@@ -1,6 +1,7 @@
 package com.example.agentos.demo.calendar
 
 import android.content.Context
+import android.util.AtomicFile
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -15,6 +16,8 @@ internal data class CalendarEntry(
     val location: String,
     val notes: String,
     val updatedAt: Long,
+    val kind: String = "event",
+    val completed: Boolean = false,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
@@ -24,7 +27,7 @@ internal data class CalendarEntry(
         .put("endTime", endTime)
         .put("location", location)
         .put("notes", notes)
-        .put("updatedAt", updatedAt)
+        .put("updatedAt", updatedAt).put("kind", kind).put("completed", completed)
 
     companion object {
         fun fromJson(value: JSONObject): CalendarEntry = CalendarEntry(
@@ -36,19 +39,21 @@ internal data class CalendarEntry(
             location = value.optString("location"),
             notes = value.optString("notes"),
             updatedAt = value.optLong("updatedAt"),
+            kind = value.optString("kind", "event"),
+            completed = value.optBoolean("completed", false),
         )
     }
 }
 
 internal class CalendarRepository(context: Context) {
-    private val file = File(context.filesDir, "calendar.json")
+    private val file = AtomicFile(File(context.filesDir, "calendar.json"))
 
     fun list(): List<CalendarEntry> = synchronized(LOCK) {
         read().sortedWith(compareBy<CalendarEntry> { it.date }.thenBy { it.startTime }.thenByDescending { it.updatedAt })
     }
 
-    fun create(title: String, date: String, start: String, end: String, location: String, notes: String): CalendarEntry = synchronized(LOCK) {
-        val entry = CalendarEntry(UUID.randomUUID().toString(), title.trim(), date.trim(), start.trim(), end.trim(), location.trim(), notes.trim(), System.currentTimeMillis())
+    fun create(title: String, date: String, start: String, end: String, location: String, notes: String, kind: String = "event"): CalendarEntry = synchronized(LOCK) {
+        val entry = CalendarEntry(UUID.randomUUID().toString(), title.trim(), date.trim(), start.trim(), end.trim(), location.trim(), notes.trim(), System.currentTimeMillis(), kind)
         write(read() + entry)
         entry
     }
@@ -57,8 +62,17 @@ internal class CalendarRepository(context: Context) {
         val records = read()
         val index = records.indexOfFirst { it.id == id }
         require(index >= 0) { "Event not found: $id" }
-        val entry = CalendarEntry(id, title.trim(), date.trim(), start.trim(), end.trim(), location.trim(), notes.trim(), System.currentTimeMillis())
+        val entry = CalendarEntry(id, title.trim(), date.trim(), start.trim(), end.trim(), location.trim(), notes.trim(), System.currentTimeMillis(), records[index].kind, records[index].completed)
         write(records.toMutableList().also { it[index] = entry })
+        entry
+    }
+
+    fun complete(id: String): CalendarEntry = synchronized(LOCK) {
+        val entries = read()
+        val index = entries.indexOfFirst { it.id == id && it.kind == "todo" }
+        require(index >= 0) { "Todo not found" }
+        val entry = entries[index].copy(completed = true, updatedAt = System.currentTimeMillis())
+        write(entries.toMutableList().also { it[index] = entry })
         entry
     }
 
@@ -71,7 +85,7 @@ internal class CalendarRepository(context: Context) {
     }
 
     private fun read(): List<CalendarEntry> = runCatching {
-        val input = JSONArray(file.readText())
+        val input = JSONArray(file.readFully().toString(Charsets.UTF_8))
         buildList {
             for (index in 0 until input.length()) {
                 val item = input.optJSONObject(index) ?: continue
@@ -83,7 +97,9 @@ internal class CalendarRepository(context: Context) {
     private fun write(entries: List<CalendarEntry>) {
         val output = JSONArray()
         entries.forEach { output.put(it.toJson()) }
-        file.writeText(output.toString())
+        val stream = file.startWrite()
+        try { stream.write(output.toString().toByteArray()); file.finishWrite(stream) }
+        catch (error: Throwable) { file.failWrite(stream); throw error }
     }
 
     companion object { private val LOCK = Any() }

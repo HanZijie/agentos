@@ -4,4 +4,7 @@
         <permission name="android.permission.RECORD_AUDIO" fixed="false" />
         <permission name="android.permission.POST_NOTIFICATIONS" fixed="false" />
     </exception>
+    <exception package="com.example.agentos.demo.alarm">
+        <permission name="android.permission.POST_NOTIFICATIONS" fixed="false" />
+    </exception>
 </exceptions>

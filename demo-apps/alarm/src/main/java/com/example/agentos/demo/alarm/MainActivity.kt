@@ -35,6 +35,8 @@ class MainActivity : Activity() {
         refreshList()
     }
 
+    override fun onResume() { super.onResume(); if (::list.isInitialized) refreshList() }
+
     private fun buildScreen(): View {
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL

@@ -1,0 +1,118 @@
+{
+  "protocolVersion": 3,
+  "pluginId": "com.example.agentos.demo.records",
+  "displayName": "Meeting Records",
+  "version": "0.2.0",
+  "tools": [
+    {
+      "name": "records.list",
+      "description": "Read meeting records, optionally search title/body",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": ""
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "sideEffects": "none",
+      "timeoutHintMs": 8000
+    },
+    {
+      "name": "records.get",
+      "description": "Read one meeting record by id",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": ""
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      },
+      "sideEffects": "none",
+      "timeoutHintMs": 8000
+    },
+    {
+      "name": "records.create",
+      "description": "Create a meeting record",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": ""
+          },
+          "body": {
+            "type": "string",
+            "description": ""
+          },
+          "meetingTime": {
+            "type": "string",
+            "description": ""
+          }
+        },
+        "required": [
+          "title",
+          "body"
+        ],
+        "additionalProperties": false
+      },
+      "sideEffects": "external",
+      "timeoutHintMs": 8000
+    },
+    {
+      "name": "records.update",
+      "description": "Update a meeting record",
+      "sideEffects": "external",
+      "timeoutHintMs": 8000,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "meetingTime": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "body"
+        ]
+      }
+    },
+    {
+      "name": "records.delete",
+      "description": "Delete a meeting record",
+      "sideEffects": "external",
+      "timeoutHintMs": 8000,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    }
+  ],
+  "resources": []
+}

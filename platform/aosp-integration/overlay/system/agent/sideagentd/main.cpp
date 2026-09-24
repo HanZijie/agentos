@@ -35,6 +35,7 @@
 #include "aidl/com/example/agentos/IAgentPluginResultSink.h"
 
 #include "runtime_worker.h"
+#include <json/json.h>
 #include "session_selector.h"
 
 using aidl::com::example::agentos::AgentEnqueueResult;
@@ -213,7 +214,8 @@ class Sideagentd final : public BnSideagentd {
  public:
   Sideagentd()
       : started_at_ms_(NowMs()), random_(std::random_device{}()),
-        worker_([this](const agentos::RuntimeEvent& event) { OnRuntimeEvent(event); }) {
+        worker_([this](const agentos::RuntimeEvent& event) { OnRuntimeEvent(event); },
+                [this](const std::string& id) { return History(id); }) {
     LoadState();
     worker_.Start();
     ResumeQueued();
@@ -610,7 +612,7 @@ class Sideagentd final : public BnSideagentd {
       session->second.last_activity_ms = NowMs(); ++queued_tasks_;
       result.accepted = true; result.taskId = request.task_id; result.messageId = request.message_id;
       task = agentos::RuntimeTask{session_id, request.task_id, request_id, content_json,
-                                  session->second.metadata_json};
+                                  session->second.metadata_json, user_id};
       PersistLocked();
     }
     Emit(session_id, "{\"eventType\":\"task.queued\",\"requestId\":" +
@@ -622,6 +624,31 @@ class Sideagentd final : public BnSideagentd {
     return result;
   }
 
+  std::string History(const std::string& session_id) {
+    std::lock_guard<std::mutex> guard(lock_);
+    Json::Value messages(Json::arrayValue);
+    auto session = agent_sessions_.find(session_id);
+    if (session == agent_sessions_.end()) return "[]";
+    Json::CharReaderBuilder reader;
+    for (const Event& event : session->second.events) {
+      Json::Value value;
+      std::string errors;
+      std::istringstream stream(event.json);
+      if (!Json::parseFromStream(reader, stream, &value, &errors) || value["eventType"] != "task.output") continue;
+      auto request = session->second.requests.find(value["requestId"].asString());
+      if (request == session->second.requests.end() || request->second.state != "completed") continue;
+      Json::Value user(Json::objectValue), answer(Json::objectValue);
+      user["role"] = "user"; user["content"] = PromptText(request->second.content_json);
+      answer["role"] = "assistant"; answer["content"] = value["content"]["text"];
+      messages.append(user); messages.append(answer);
+    }
+    Json::Value recent(Json::arrayValue);
+    for (Json::ArrayIndex i = messages.size() > 12 ? messages.size() - 12 : 0; i < messages.size(); ++i)
+      recent.append(messages[i]);
+    Json::StreamWriterBuilder writer; writer["indentation"] = "";
+    return Json::writeString(writer, recent);
+  }
+
   void OnRuntimeEvent(const agentos::RuntimeEvent& event) {
     std::string event_json;
     {
@@ -630,7 +657,9 @@ class Sideagentd final : public BnSideagentd {
       if (session == agent_sessions_.end()) return;
       auto request = session->second.requests.find(event.request_id);
       if (request == session->second.requests.end() || request->second.task_id != event.task_id) return;
-      if (event.type == "output") {
+      if (event.type == "tool") {
+        event_json = event.text;
+      } else if (event.type == "output") {
         session->second.latest_answer = event.text;
         if (session->second.first_answer.empty()) session->second.first_answer = event.text;
         event_json = "{\"eventType\":\"task.output\",\"requestId\":" + JsonString(event.request_id) +
@@ -757,7 +786,7 @@ class Sideagentd final : public BnSideagentd {
         for (auto& [request_id, request] : session.requests) {
           if (request.state != "queued") continue;
           tasks.push_back(agentos::RuntimeTask{session_id, request.task_id, request_id,
-                                              request.content_json, session.metadata_json});
+                                              request.content_json, session.metadata_json, session.user_id});
         }
       }
       PersistLocked();

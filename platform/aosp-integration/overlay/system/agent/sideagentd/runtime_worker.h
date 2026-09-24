@@ -19,6 +19,7 @@ struct RuntimeTask {
   std::string request_id;
   std::string content_json;
   std::string metadata_json;
+  int32_t user_id = 0;
 };
 
 struct RuntimeEvent {
@@ -38,7 +39,8 @@ using RuntimeEventCallback = std::function<void(const RuntimeEvent&)>;
 // recovery; a worker only reports an attempt's result.
 class NativeRuntimeWorker {
  public:
-  explicit NativeRuntimeWorker(RuntimeEventCallback callback);
+  explicit NativeRuntimeWorker(RuntimeEventCallback callback,
+      std::function<std::string(const std::string&)> history = {});
   ~NativeRuntimeWorker();
 
   NativeRuntimeWorker(const NativeRuntimeWorker&) = delete;
@@ -55,6 +57,7 @@ class NativeRuntimeWorker {
   void Emit(RuntimeEvent event);
 
   RuntimeEventCallback callback_;
+  std::function<std::string(const std::string&)> history_;
   HttpsClient http_;
   std::mutex lock_;
   std::condition_variable condition_;

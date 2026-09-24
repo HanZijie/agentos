@@ -1,6 +1,7 @@
 package com.example.agentos.demo.records
 
 import android.content.Context
+import android.util.AtomicFile
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -33,7 +34,7 @@ internal data class MeetingRecord(
 
 /** Small file-backed store so the demo works without a database dependency. */
 internal class RecordsRepository(context: Context) {
-    private val file = File(context.filesDir, "meeting-records.json")
+    private val file = AtomicFile(File(context.filesDir, "meeting-records.json"))
 
     fun list(query: String = ""): List<MeetingRecord> = synchronized(LOCK) {
         val normalized = query.trim().lowercase()
@@ -82,7 +83,7 @@ internal class RecordsRepository(context: Context) {
     }
 
     private fun read(): List<MeetingRecord> = runCatching {
-        val input = JSONArray(file.readText())
+        val input = JSONArray(file.readFully().toString(Charsets.UTF_8))
         buildList {
             for (index in 0 until input.length()) {
                 val item = input.optJSONObject(index) ?: continue
@@ -94,7 +95,9 @@ internal class RecordsRepository(context: Context) {
     private fun write(records: List<MeetingRecord>) {
         val output = JSONArray()
         records.forEach { output.put(it.toJson()) }
-        file.writeText(output.toString())
+        val stream = file.startWrite()
+        try { stream.write(output.toString().toByteArray()); file.finishWrite(stream) }
+        catch (error: Throwable) { file.failWrite(stream); throw error }
     }
 
     companion object {

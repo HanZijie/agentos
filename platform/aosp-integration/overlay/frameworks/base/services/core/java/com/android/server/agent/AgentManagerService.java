@@ -60,6 +60,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
+import java.io.InputStream;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -92,6 +94,10 @@ public final class AgentManagerService extends SystemService {
                 return thread;
             });
     private boolean mLoaded;
+    private static final int SIDEAGENT_UID = 1096;
+    private static final long IDLE_UNBIND_MS = 30_000L;
+    private static final long LEASE_MS = 60_000L;
+
 
     public AgentManagerService(Context context) {
         super(context);
@@ -271,10 +277,28 @@ public final class AgentManagerService extends SystemService {
                         || UserHandle.getUserId(pkg.applicationInfo.uid) != userId) continue;
                 found.put(key, new PluginRecord(userId, id,
                         new ComponentName(info.packageName, info.name), pkg.applicationInfo.uid,
-                        signerFor(pkg), pkg.getLongVersionCode(), info.directBootAware));
+                        signerFor(pkg), pkg.getLongVersionCode(), info.directBootAware,
+                        readStaticDescriptor(info)));
             } catch (Exception e) { Slog.w(TAG, "Plugin identity unavailable: " + info.packageName); }
         }
         for (String key : duplicates) found.remove(key);
+        // Product demo policy: pregrant only the bundled, platform-signed demos,
+        // once per user. An explicit later disable survives scans and reboots.
+        String defaultsKey = userId + "/.demo-defaults-v1";
+        if (!mEnabled.containsKey(defaultsKey)) {
+            ArrayMap<String, String> next = new ArrayMap<>(mEnabled);
+            for (PluginRecord candidate : found.values()) {
+                if (candidate.pluginId.startsWith("com.example.agentos.demo.")
+                        && (candidate.pluginId.endsWith(".records")
+                        || candidate.pluginId.endsWith(".calendar") || candidate.pluginId.endsWith(".alarm"))
+                        && mPackageManager.checkSignatures("android", candidate.pluginId)
+                        == PackageManager.SIGNATURE_MATCH && !candidate.descriptorJson.isEmpty()) {
+                    next.put(keyFor(userId, candidate.pluginId), candidate.signer);
+                }
+            }
+            next.put(defaultsKey, "applied");
+            persistQuietly(next);
+        }
         for (int i = mPlugins.size() - 1; i >= 0; i--) {
             PluginRecord old = mPlugins.valueAt(i);
             if (old.userId != userId) continue;
@@ -293,7 +317,7 @@ public final class AgentManagerService extends SystemService {
                 next.remove(key);
                 persistQuietly(next);
             }
-            if (isEnabled(record)) bindEnabled(record);
+            // Enabled means eligible. Binding begins only on capability acquisition.
         }
     }
 
@@ -308,7 +332,8 @@ public final class AgentManagerService extends SystemService {
         record.retry = () -> {
             record.retry = null;
             if (mPlugins.get(keyFor(record.userId, record.pluginId)) == record
-                    && mStartedUsers.contains(record.userId) && isEnabled(record)) bindEnabled(record);
+                    && mStartedUsers.contains(record.userId) && isEnabled(record)
+                    && !record.leases.isEmpty()) bindEnabled(record);
         };
         mHandler.postDelayed(record.retry, record.retryMs);
         record.retryMs = Math.min(record.retryMs * 2, 30000L);
@@ -376,12 +401,19 @@ public final class AgentManagerService extends SystemService {
                                 fail(record, this, "sideagentd_handoff_failed"); return;
                             }
                             if (negotiatedV2) {
-                                try { endpoint.sessionGranted(sessionId, capabilities(response)); }
+                                try { AgentPluginCapabilities granted = new AgentPluginCapabilities();
+                                      granted.grantedTools = record.session.grantedTools;
+                                      granted.grantedResources = record.session.grantedResources;
+                                      endpoint.sessionGranted(sessionId, granted); }
                                 catch (Exception e) { fail(record, this, "capability_grant_failed"); return; }
                             }
                             record.state = "active";
                             record.lastError = "";
                             record.retryMs = 1000L;
+                            for (CompletableFuture<AgentPluginSession> waiter : record.pending.values()) {
+                                waiter.complete(record.session);
+                            }
+                            record.pending.clear();
                         });
                     });
                 } catch (RuntimeException e) { fail(record, this, "handshake_capacity"); }
@@ -411,6 +443,12 @@ public final class AgentManagerService extends SystemService {
 
     private void unbind(PluginRecord record) {
         ServiceConnection connection = record.connection;
+        for (CompletableFuture<AgentPluginSession> waiter : record.pending.values()) {
+            waiter.completeExceptionally(new IllegalStateException("Plugin session unavailable"));
+        }
+        record.pending.clear();
+        record.leases.clear();
+        record.session = null;
         record.connection = null;
         if (record.timeout != null) mHandler.removeCallbacks(record.timeout);
         if (record.retry != null) mHandler.removeCallbacks(record.retry);
@@ -445,7 +483,7 @@ public final class AgentManagerService extends SystemService {
         else next.remove(keyFor(userId, id));
         if (enabled) {
             persist(next);
-            bindEnabled(record);
+            // Persist eligibility without starting the Plugin process.
         } else {
             // Revoke before disk I/O: failed persistence must not leave a live grant.
             mEnabled = next;
@@ -492,9 +530,18 @@ public final class AgentManagerService extends SystemService {
             session.pluginId = record.pluginId;
             session.packageName = record.component.getPackageName();
             session.endpoint = endpoint;
+            session.pluginUid = record.uid;
             session.grantedTools = names(raw.optJSONArray("tools"));
+            if (!record.descriptorJson.isEmpty()) {
+                ArraySet<String> declared = new ArraySet<>();
+                Collections.addAll(declared, names(new JSONObject(record.descriptorJson).optJSONArray("tools")));
+                ArrayList<String> granted = new ArrayList<>();
+                for (String tool : session.grantedTools) if (declared.contains(tool)) granted.add(tool);
+                session.grantedTools = granted.toArray(new String[0]);
+            }
             session.grantedResources = names(raw.optJSONArray("resources"));
             daemon.registerPluginSession(session);
+            record.session = session;
             return true;
         } catch (Exception e) {
             Slog.w(TAG, "Plugin session handoff failed: " + record.pluginId, e);
@@ -529,7 +576,7 @@ public final class AgentManagerService extends SystemService {
             rows.put(new JSONObject().put("userId", record.userId).put("pluginId", record.pluginId)
                     .put("uid", record.uid).put("versionCode", record.version)
                     .put("enabled", isEnabled(record)).put("state", record.state)
-                    .put("sessionId", record.sessionId).put("lastError", record.lastError));
+                    .put("sessionId", record.sessionId).put("leases", record.leases.size()).put("lastError", record.lastError));
         }
         return rows.toString();
     }
@@ -567,7 +614,92 @@ public final class AgentManagerService extends SystemService {
         return daemon;
     }
 
+    private String readStaticDescriptor(ServiceInfo info) {
+        int resource = info.metaData == null ? 0 : info.metaData.getInt("agentos.plugin.descriptor", 0);
+        if (resource == 0) return "";
+        try (InputStream input = mPackageManager.getResourcesForApplication(info.applicationInfo)
+                .openRawResource(resource)) {
+            byte[] bytes = input.readNBytes(65537);
+            if (bytes.length > 65536) return "";
+            JSONObject raw = new JSONObject(new String(bytes, StandardCharsets.UTF_8));
+            if (!info.packageName.equals(raw.optString("pluginId"))) return "";
+            return raw.toString();
+        } catch (Exception e) { return ""; }
+    }
+
+    private static void enforceRuntimeCaller() {
+        if (Binder.getCallingUid() != SIDEAGENT_UID)
+            throw new SecurityException("Capability broker is sideagent-only");
+    }
+
+    private void releaseLease(PluginRecord record, String leaseId) {
+        record.leases.remove(leaseId);
+        CompletableFuture<AgentPluginSession> pending = record.pending.remove(leaseId);
+        if (pending != null) pending.completeExceptionally(new IllegalStateException("Plugin lease expired"));
+        long idleGeneration = ++record.idleGeneration;
+        mHandler.postDelayed(() -> {
+            if (record.idleGeneration == idleGeneration && record.leases.isEmpty()) unbind(record);
+        }, IDLE_UNBIND_MS);
+    }
+
     private final class BinderService extends IAgentManager.Stub {
+        @Override public String getRuntimePluginCatalog(int userId) {
+            enforceRuntimeCaller();
+            return control(() -> {
+                JSONArray catalog = new JSONArray();
+                if (!mStartedUsers.contains(userId)) return catalog.toString();
+                for (PluginRecord record : mPlugins.values()) {
+                    if (record.userId == userId && isEnabled(record) && !record.descriptorJson.isEmpty())
+                        catalog.put(new JSONObject(record.descriptorJson));
+                }
+                return catalog.toString();
+            });
+        }
+
+        @Override public AgentPluginSession acquireRuntimePlugin(int userId, String pluginId, String leaseId) {
+            enforceRuntimeCaller();
+            if (leaseId == null || leaseId.isEmpty() || leaseId.length() > 512)
+                throw new IllegalArgumentException("Bounded lease id is required");
+            CompletableFuture<AgentPluginSession> future = new CompletableFuture<>();
+            control(() -> {
+                PluginRecord record = mPlugins.get(keyFor(userId, pluginId));
+                if (record == null || !isEnabled(record) || !mStartedUsers.contains(userId)
+                        || record.descriptorJson.isEmpty() || record.leases.size() >= 32)
+                    throw new SecurityException("Plugin is not enabled for this user");
+                record.idleGeneration++;
+                record.leases.add(leaseId);
+                mHandler.postDelayed(() -> releaseLease(record, leaseId), LEASE_MS);
+                if ("active".equals(record.state) && record.session != null) {
+                    // Re-register on each acquisition so a daemon restart cannot retain
+                    // an unregistered endpoint or silently reuse an old capability grant.
+                    requireSideagentd().registerPluginSession(record.session);
+                    future.complete(record.session);
+                } else {
+                    record.pending.put(leaseId, future);
+                    bindEnabled(record);
+                }
+                return null;
+            });
+            try { return future.get(HANDSHAKE_TIMEOUT_MS + 2000L, TimeUnit.MILLISECONDS); }
+            catch (Exception e) {
+                control(() -> {
+                    PluginRecord record = mPlugins.get(keyFor(userId, pluginId));
+                    if (record != null) releaseLease(record, leaseId);
+                    return null;
+                });
+                throw new IllegalStateException("Plugin acquisition failed", e);
+            }
+        }
+
+        @Override public void releaseRuntimePlugin(String sessionId, String leaseId) {
+            enforceRuntimeCaller();
+            mHandler.post(() -> {
+                for (PluginRecord record : mPlugins.values()) {
+                    if (sessionId.equals(record.sessionId)) releaseLease(record, leaseId);
+                }
+            });
+        }
+
         @Override public AgentHealth getHealth() { enforceSystemCaller(); return health(); }
         @Override public String[] getDiscoveredPluginIds(int userId) {
             enforceSystemCaller();
@@ -797,6 +929,12 @@ public final class AgentManagerService extends SystemService {
         final String signer;
         final long version;
         final boolean directBootAware;
+        final String descriptorJson;
+        final ArrayMap<String, CompletableFuture<AgentPluginSession>> pending = new ArrayMap<>();
+        final ArraySet<String> leases = new ArraySet<>();
+        AgentPluginSession session;
+        long idleGeneration;
+
         ServiceConnection connection;
         IAgentPluginEndpoint endpoint;
         Runnable timeout;
@@ -806,10 +944,11 @@ public final class AgentManagerService extends SystemService {
         String lastError = "";
         long retryMs = 1000L;
         PluginRecord(int userId, String id, ComponentName component, int uid, String signer,
-                long version, boolean directBootAware) {
+                long version, boolean directBootAware, String descriptorJson) {
             this.userId = userId; this.pluginId = id; this.component = component;
             this.uid = uid; this.signer = signer; this.version = version;
             this.directBootAware = directBootAware;
+            this.descriptorJson = descriptorJson;
         }
         boolean sameIdentity(PluginRecord other) {
             return component.equals(other.component) && uid == other.uid

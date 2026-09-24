@@ -1,0 +1,122 @@
+{
+  "protocolVersion": 3,
+  "pluginId": "com.example.agentos.demo.calendar",
+  "displayName": "Calendar and Todo",
+  "version": "0.2.0",
+  "tools": [
+    {
+      "name": "calendar.list",
+      "description": "Read saved calendar events",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "sideEffects": "none",
+      "timeoutHintMs": 8000
+    },
+    {
+      "name": "calendar.create",
+      "description": "Create an event in this Calendar App",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Event title"
+          },
+          "date": {
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          "startTime": {
+            "type": "string",
+            "description": "HH:mm local time"
+          },
+          "endTime": {
+            "type": "string",
+            "description": "HH:mm local time"
+          },
+          "location": {
+            "type": "string",
+            "description": "Optional place"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Optional source details"
+          }
+        },
+        "required": [
+          "title",
+          "date",
+          "startTime",
+          "endTime"
+        ],
+        "additionalProperties": false
+      },
+      "sideEffects": "external",
+      "timeoutHintMs": 8000
+    },
+    {
+      "name": "todo.list",
+      "description": "Read saved todo items",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "sideEffects": "none",
+      "timeoutHintMs": 8000
+    },
+    {
+      "name": "todo.create",
+      "description": "Create a todo visible in the Calendar App",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": ""
+          },
+          "dueDate": {
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          "notes": {
+            "type": "string",
+            "description": ""
+          }
+        },
+        "required": [
+          "title",
+          "dueDate"
+        ],
+        "additionalProperties": false
+      },
+      "sideEffects": "external",
+      "timeoutHintMs": 8000
+    },
+    {
+      "name": "todo.complete",
+      "description": "Mark a todo completed",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": ""
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      },
+      "sideEffects": "external",
+      "timeoutHintMs": 8000
+    }
+  ],
+  "resources": []
+}

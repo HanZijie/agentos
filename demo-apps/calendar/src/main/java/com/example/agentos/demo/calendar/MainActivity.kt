@@ -36,6 +36,8 @@ class MainActivity : Activity() {
         refreshList()
     }
 
+    override fun onResume() { super.onResume(); if (::repository.isInitialized) refreshList() }
+
     private fun buildScreen(): View {
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -159,13 +161,16 @@ class MainActivity : Activity() {
                 setBackgroundColor(Color.WHITE)
                 layoutParams = LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT).apply { setMargins(0, 0, 0, 10) }
             }
-            card.addView(TextView(this).apply { text = entry.title; textSize = 18f; setTextColor(Color.rgb(27, 50, 39)) })
+            card.addView(TextView(this).apply { text = (if (entry.kind == "todo") (if (entry.completed) "✓ " else "□ ") else "") + entry.title; textSize = 18f; setTextColor(Color.rgb(27, 50, 39)) })
             card.addView(TextView(this).apply {
                 text = listOf("${entry.date}  ${entry.startTime}-${entry.endTime}", entry.location, entry.notes).filter { it.isNotBlank() }.joinToString(" · ")
                 setTextColor(Color.DKGRAY)
                 setPadding(0, 5, 0, 8)
             })
-            card.addView(Button(this).apply { text = "编辑这条"; setOnClickListener { select(entry) } })
+            if (entry.kind == "todo") {
+                card.addView(Button(this).apply { text = if (entry.completed) "已完成" else "标为完成"; isEnabled = !entry.completed
+                    setOnClickListener { repository.complete(entry.id); refreshList() } })
+            } else card.addView(Button(this).apply { text = "编辑这条"; setOnClickListener { select(entry) } })
             list.addView(card)
         }
     }

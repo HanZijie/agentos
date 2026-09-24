@@ -44,6 +44,7 @@
             <meta-data
                 android:name="agentos.plugin.id"
                 android:value="com.example.agentos.demo.records" />
+            <meta-data android:name="agentos.plugin.descriptor" android:resource="@raw/agentos_plugin" />
         </service>
     </application>
 </manifest>

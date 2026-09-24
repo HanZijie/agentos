@@ -12,3 +12,5 @@ android {
         versionName = "0.1"
     }
 }
+
+dependencies { implementation(project(":plugin-api")) }

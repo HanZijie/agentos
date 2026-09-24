@@ -1,6 +1,7 @@
 package com.example.agentos.demo.alarm
 
 import android.content.Context
+import android.util.AtomicFile
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -32,7 +33,7 @@ internal data class AlarmItem(
 }
 
 internal class AlarmRepository(context: Context) {
-    private val file = File(context.filesDir, "alarms.json")
+    private val file = AtomicFile(File(context.filesDir, "alarms.json"))
 
     fun list(): List<AlarmItem> = synchronized(LOCK) { read().sortedBy { it.triggerAt } }
 
@@ -61,7 +62,7 @@ internal class AlarmRepository(context: Context) {
     }
 
     private fun read(): List<AlarmItem> = runCatching {
-        val input = JSONArray(file.readText())
+        val input = JSONArray(file.readFully().toString(Charsets.UTF_8))
         buildList {
             for (index in 0 until input.length()) {
                 val item = input.optJSONObject(index) ?: continue
@@ -73,7 +74,9 @@ internal class AlarmRepository(context: Context) {
     private fun write(items: List<AlarmItem>) {
         val output = JSONArray()
         items.forEach { output.put(it.toJson()) }
-        file.writeText(output.toString())
+        val stream = file.startWrite()
+        try { stream.write(output.toString().toByteArray()); file.finishWrite(stream) }
+        catch (error: Throwable) { file.failWrite(stream); throw error }
     }
 
     companion object { private val LOCK = Any() }

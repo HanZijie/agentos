@@ -18,4 +18,5 @@ parcelable AgentPluginSession {
     String[] grantedTools;
     String[] grantedResources;
     IAgentPluginEndpoint endpoint;
+    int pluginUid;
 }

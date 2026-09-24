@@ -19,5 +19,10 @@ allow system_server sideagent_service:service_manager find;
 binder_call(system_server, sideagentd)
 allow shell agentos_service:service_manager find;
 
-# Do not grant app Binder access in this bootstrap slice. The capability
-# endpoint policy is added only with the versioned Plugin AIDL and its tests.
+
+# Endpoint handles are acquired from the system broker after per-user grants.
+# Apps cannot find the daemon service; result callbacks validate the Plugin UID.
+allow sideagentd agentos_service:service_manager find;
+binder_call(sideagentd, system_server)
+binder_call(sideagentd, appdomain)
+binder_call(appdomain, sideagentd)

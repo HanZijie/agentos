@@ -8,11 +8,9 @@ import android.content.Intent
 internal object AlarmScheduler {
     fun schedule(context: Context, item: AlarmItem) {
         val manager = context.getSystemService(AlarmManager::class.java)
-        manager.setAndAllowWhileIdle(
-            AlarmManager.RTC_WAKEUP,
-            item.triggerAt.coerceAtLeast(System.currentTimeMillis() + 1000L),
-            pendingIntent(context, item),
-        )
+        val open = PendingIntent.getActivity(context, item.id.hashCode(),
+            Intent(context, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        manager.setAlarmClock(AlarmManager.AlarmClockInfo(item.triggerAt, open), pendingIntent(context, item))
     }
 
     fun cancel(context: Context, item: AlarmItem) {
