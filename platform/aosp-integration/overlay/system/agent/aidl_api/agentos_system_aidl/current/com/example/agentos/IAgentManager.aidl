@@ -15,26 +15,22 @@
 // independently updatable components of the system. If a device is shipped
 // with such a backward incompatible change, it has a high risk of breaking
 // later when a module using the interface is updated, e.g., Mainline modules.
-///////////////////////////////////////////////////////////////////////////////
 
 package com.example.agentos;
-
-import com.example.agentos.AgentHealth;
-import com.example.agentos.AgentEnqueueResult;
-import com.example.agentos.AgentSessionSnapshot;
-import com.example.agentos.IAgentEventCallback;
-
 @VintfStability
 interface IAgentManager {
-    AgentHealth getHealth();
-    String[] getDiscoveredPluginIds(int userId);
-    void setPluginEnabled(int userId, String pluginId, boolean enabled);
-    String createSession(String frontendId, String metadataJson);
-    AgentEnqueueResult submitInput(String sessionId, String requestId, String contentJson);
-    AgentEnqueueResult submitAutoInput(String frontendId, String metadataJson, String requestId, String contentJson);
-    void subscribeOutput(String sessionId, long afterSequence, IAgentEventCallback callback);
-    void unsubscribeOutput(String sessionId, IAgentEventCallback callback);
-    void cancelTask(String sessionId, String requestId);
-    void resolveRecovery(String sessionId, String requestId);
-    AgentSessionSnapshot getSnapshot(String sessionId);
+  com.example.agentos.AgentHealth getHealth();
+  String[] getDiscoveredPluginIds(int userId);
+  void setPluginEnabled(int userId, String pluginId, boolean enabled);
+  String createSession(String frontendId, String metadataJson);
+  com.example.agentos.AgentEnqueueResult submitInput(String sessionId, String requestId, String contentJson);
+  com.example.agentos.AgentEnqueueResult submitAutoInput(String frontendId, String metadataJson, String requestId, String contentJson);
+  void subscribeOutput(String sessionId, long afterSequence, com.example.agentos.IAgentEventCallback callback);
+  void unsubscribeOutput(String sessionId, com.example.agentos.IAgentEventCallback callback);
+  void cancelTask(String sessionId, String requestId);
+  void resolveRecovery(String sessionId, String requestId);
+  com.example.agentos.AgentSessionSnapshot getSnapshot(String sessionId);
+  String getRuntimePluginCatalog(int userId);
+  com.example.agentos.AgentPluginSession acquireRuntimePlugin(int userId, String pluginId, String leaseId);
+  oneway void releaseRuntimePlugin(String pluginSessionId, String leaseId);
 }
