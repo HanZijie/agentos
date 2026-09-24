@@ -54,6 +54,19 @@ class NotesPluginEndpoint(context: Context, private val mcp: JSONObject) : IAgen
         )
     }
 
+    override fun invokeSync(request: AgentPluginInvokeRequest): AgentPluginInvokeResult {
+        val session = sessions[request.pluginSessionId]
+            ?: return error(request.requestId, "unavailable", "Plugin session is not registered", true)
+        if (request.tool !in session.tools)
+            return error(request.requestId, "capability_denied", "Tool is not granted", false)
+        if (request.deadlineEpochMs <= System.currentTimeMillis())
+            return error(request.requestId, "timeout", "Tool deadline has elapsed", true)
+        return runCatching { execute(request) }.fold(
+            onSuccess = { ok(request.requestId, it.toString()) },
+            onFailure = { error(request.requestId, "tool_failed", it.message ?: "Notes tool failed", false) },
+        )
+    }
+
     override fun beginInvoke(request: AgentPluginInvokeRequest, sink: IAgentPluginResultSink) {
         val session = sessions[request.pluginSessionId]
         val callId = "${request.pluginSessionId}\n${request.requestId}"
@@ -70,20 +83,22 @@ class NotesPluginEndpoint(context: Context, private val mcp: JSONObject) : IAgen
             return
         }
         calls[callId] = workers.submit {
-            val result = runCatching {
-                val args = JSONObject(request.argsJson)
-                when (request.tool) {
-                    "notes.search" -> JSONObject().put("notes", repository.search(args.optString("query")))
-                    "notes.update" -> JSONObject().put("ok", true).put(
-                        "notes", repository.update(args.optString("id"), args.optString("title"), args.optString("body")))
-                    else -> error("Unknown notes tool: ${request.tool}")
-                }
-            }
+            val result = runCatching { execute(request) }
             sink.onResult(result.fold(
                 onSuccess = { ok(request.requestId, it.toString()) },
                 onFailure = { error(request.requestId, "tool_failed", it.message ?: "Notes tool failed", false) },
             ))
             calls.remove(callId)
+        }
+    }
+
+    private fun execute(request: AgentPluginInvokeRequest): JSONObject {
+        val args = JSONObject(request.argsJson)
+        return when (request.tool) {
+            "notes.search" -> JSONObject().put("notes", repository.search(args.optString("query")))
+            "notes.update" -> JSONObject().put("ok", true).put(
+                "notes", repository.update(args.optString("id"), args.optString("title"), args.optString("body")))
+            else -> error("Unknown notes tool: ${request.tool}")
         }
     }
 
