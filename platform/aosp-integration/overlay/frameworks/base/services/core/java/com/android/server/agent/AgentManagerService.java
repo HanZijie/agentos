@@ -430,7 +430,8 @@ public final class AgentManagerService extends SystemService {
             // A capability lease is an active request even when the Plugin has no Activity.
             // Mark the binding important so cached-app freezer/OOM policy cannot suspend the
             // endpoint between the lazy handshake and the sideagentd invocation.
-            final int bindFlags = Context.BIND_AUTO_CREATE | Context.BIND_IMPORTANT;
+            final int bindFlags = Context.BIND_AUTO_CREATE | Context.BIND_IMPORTANT
+                    | Context.BIND_FOREGROUND_SERVICE;
             if (!getContext().bindServiceAsUser(new Intent().setComponent(record.component),
                     connection, bindFlags, mHandler, UserHandle.of(record.userId))) {
                 fail(record, connection, "bind_failed");
