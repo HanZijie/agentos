@@ -262,6 +262,8 @@ def main():
         product_lines = ["PRODUCT_SOONG_NAMESPACES += system/agent",
                          "PRODUCT_PACKAGES += sideagentd",
                          "PRODUCT_PACKAGES += LatinIME"]
+        if args.target == "pixel8":
+            product_lines.append("PRODUCT_PACKAGE_OVERLAYS += device/google/shusky/overlay")
         if args.runtime_secret_file is not None:
             product_lines.append("PRODUCT_PACKAGES += agentos_runtime_secret")
             product_lines.append("TARGET_FS_CONFIG_GEN += system/agent/agentos.fs")
