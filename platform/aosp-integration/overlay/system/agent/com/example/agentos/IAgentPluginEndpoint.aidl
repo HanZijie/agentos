@@ -25,4 +25,5 @@ interface IAgentPluginEndpoint {
             IAgentPluginResultSink sink);
     oneway void cancelInvoke(String pluginSessionId, String requestId);
     AgentPluginInvokeResult invokeSync(in AgentPluginInvokeRequest request);
+    String invokeSyncJson(in AgentPluginInvokeRequest request);
 }

@@ -56,7 +56,20 @@ open class SystemToolEndpoint(
 
     override fun invokeSync(request: AgentPluginInvokeRequest): AgentPluginInvokeResult {
         runtimeCaller()
-        return execute(request)
+        Log.i(TAG, "invokeSync request=${request.requestId} tool=${request.tool}")
+        val reply = execute(request)
+        Log.i(TAG, "invokeSync reply request=${request.requestId} status=${reply.status} code=${reply.error.code}")
+        return reply
+    }
+
+    override fun invokeSyncJson(request: AgentPluginInvokeRequest): String {
+        runtimeCaller()
+        val reply = execute(request)
+        return JSONObject()
+            .put("status", reply.status)
+            .put("resultJson", reply.resultJson)
+            .put("errorCode", reply.error.code)
+            .toString()
     }
 
     override fun sessionGranted(id: String, granted: AgentPluginCapabilities) {

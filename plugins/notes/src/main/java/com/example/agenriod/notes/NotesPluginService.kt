@@ -67,6 +67,15 @@ class NotesPluginEndpoint(context: Context, private val mcp: JSONObject) : IAgen
         )
     }
 
+    override fun invokeSyncJson(request: AgentPluginInvokeRequest): String {
+        val reply = invokeSync(request)
+        return JSONObject()
+            .put("status", reply.status)
+            .put("resultJson", reply.resultJson)
+            .put("errorCode", reply.error.code)
+            .toString()
+    }
+
     override fun beginInvoke(request: AgentPluginInvokeRequest, sink: IAgentPluginResultSink) {
         val session = sessions[request.pluginSessionId]
         val callId = "${request.pluginSessionId}\n${request.requestId}"

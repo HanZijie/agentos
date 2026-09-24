@@ -27,4 +27,5 @@ interface IAgentPluginEndpoint {
   oneway void beginReadResource(in com.example.agentos.AgentPluginResourceRequest request, com.example.agentos.IAgentPluginResultSink sink);
   oneway void cancelInvoke(String pluginSessionId, String requestId);
   com.example.agentos.AgentPluginInvokeResult invokeSync(in com.example.agentos.AgentPluginInvokeRequest request);
+  String invokeSyncJson(in com.example.agentos.AgentPluginInvokeRequest request);
 }

@@ -137,6 +137,18 @@ Json::Value InvokeRuntimeTool(int user_id, const RuntimeTool& tool, const Json::
   if (request.argsJson.size() > 65536) return Error("arguments_too_large");
   request.deadlineEpochMs = std::chrono::duration_cast<std::chrono::milliseconds>(
       std::chrono::system_clock::now().time_since_epoch()).count() + 15000;
+  std::string direct_json;
+  const auto direct_json_status = session.endpoint->invokeSyncJson(request, &direct_json);
+  if (direct_json_status.isOk()) {
+    Json::Value envelope;
+    if (!Parse(direct_json, &envelope) || !envelope.isObject()) return Error("invalid_plugin_result");
+    if (envelope["status"].asString() != "ok") return Error(envelope["errorCode"].asCString());
+    Json::Value value;
+    if (!Parse(envelope["resultJson"].asString(), &value)) return Error("invalid_plugin_result");
+    return value;
+  }
+  __android_log_print(ANDROID_LOG_ERROR, "sideagentd", "plugin invokeSyncJson failed: %s",
+                      direct_json_status.getDescription().c_str());
   AgentPluginInvokeResult direct;
   const auto direct_status = session.endpoint->invokeSync(request, &direct);
   if (direct_status.isOk()) {
