@@ -19,5 +19,6 @@
 package com.example.agentos;
 @VintfStability
 interface IAgentPluginResultSink {
-  void onResult(in com.example.agentos.AgentPluginInvokeResult result);
+  oneway void onResult(in com.example.agentos.AgentPluginInvokeResult result);
+  void onResultSync(in com.example.agentos.AgentPluginInvokeResult result);
 }
