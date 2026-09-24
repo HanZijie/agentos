@@ -427,8 +427,12 @@ public final class AgentManagerService extends SystemService {
         record.timeout = () -> fail(record, connection, "bind_timeout");
         mHandler.postDelayed(record.timeout, HANDSHAKE_TIMEOUT_MS);
         try {
+            // A capability lease is an active request even when the Plugin has no Activity.
+            // Mark the binding important so cached-app freezer/OOM policy cannot suspend the
+            // endpoint between the lazy handshake and the sideagentd invocation.
+            final int bindFlags = Context.BIND_AUTO_CREATE | Context.BIND_IMPORTANT;
             if (!getContext().bindServiceAsUser(new Intent().setComponent(record.component),
-                    connection, Context.BIND_AUTO_CREATE, mHandler, UserHandle.of(record.userId))) {
+                    connection, bindFlags, mHandler, UserHandle.of(record.userId))) {
                 fail(record, connection, "bind_failed");
             }
         } catch (RuntimeException e) { fail(record, connection, "bind_rejected"); }
