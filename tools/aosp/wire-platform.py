@@ -342,9 +342,8 @@ def main():
             raise ValueError("PhoneWindowManager assistant case changed unexpectedly")
 
         updated = changes.get(power_path, power_content)
-        if "private void launchAgentosAssistant(long eventTime)" not in updated:
-            method_marker = "    private void launchAssistAction(String hint, int deviceId, long eventTime,\n"
-            agentos_method = """    private void launchAgentosAssistant(long eventTime) {
+        method_marker = "    private void launchAssistAction(String hint, int deviceId, long eventTime,\n"
+        agentos_method = """    private void launchAgentosAssistant(long eventTime) {
         try {
             if (!mPowerManager.isInteractive()) {
                 mPowerManager.wakeUp(eventTime, PowerManager.WAKE_REASON_POWER_BUTTON,
@@ -370,9 +369,20 @@ def main():
     }
 
 """
+        method_start = updated.find("    private void launchAgentosAssistant(long eventTime) {")
+        if method_start < 0:
             if method_marker not in updated:
                 raise ValueError("PhoneWindowManager assistant method marker changed unexpectedly")
             changes[power_path] = updated.replace(method_marker, agentos_method + method_marker, 1)
+        else:
+            method_end = updated.find(method_marker, method_start)
+            if method_end < 0:
+                raise ValueError("PhoneWindowManager assistant method end changed unexpectedly")
+            existing_method = updated[method_start:method_end]
+            if "setComponent(new ComponentName(\"com.example.agenriod\"" in existing_method:
+                changes[power_path] = updated[:method_start] + agentos_method + updated[method_end:]
+            elif "searchManager.launchAssist(args)" not in existing_method:
+                raise ValueError("PhoneWindowManager AgentOS assistant method changed unexpectedly")
 
     changed = {}
     for path, content in changes.items():
