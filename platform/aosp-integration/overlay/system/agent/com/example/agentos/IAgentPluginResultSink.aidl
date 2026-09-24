@@ -6,5 +6,5 @@ import com.example.agentos.AgentPluginInvokeResult;
 @VintfStability
 interface IAgentPluginResultSink {
     oneway void onResult(in AgentPluginInvokeResult result);
-    void onResultSync(in AgentPluginInvokeResult result);
+    oneway void onResultSync(in AgentPluginInvokeResult result);
 }
